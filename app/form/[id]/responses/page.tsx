@@ -7,7 +7,7 @@ import { useStorage } from '@/lib/storage'
 import { ArrowLeft, Download, FileText, Share2, Copy, Check } from 'lucide-react'
 import Link from 'next/link'
 import { useUser } from '@clerk/nextjs'
-import { useConvex, usePaginatedQuery, useQuery } from 'convex/react'
+import { useConvex, useConvexAuth, usePaginatedQuery, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
 import { docToFormResponse } from '@/lib/mapConvexResponse'
@@ -19,14 +19,15 @@ export default function ResponsesPage() {
   const formIdParam = params.id as string
   const convexFormId = formIdParam as Id<'forms'>
   const { user, isLoaded: userLoaded } = useUser()
+  const { isAuthenticated: isConvexAuthed } = useConvexAuth()
   const storage = useStorage()
   const convex = useConvex()
 
   const ownerForms = useQuery(
     api.forms.getAllForms,
-    user?.id ? { userId: user.id } : 'skip',
+    isConvexAuthed ? {} : 'skip',
   )
-  const isFormsLoading = !!user?.id && ownerForms === undefined
+  const isFormsLoading = !!user?.id && (!isConvexAuthed || ownerForms === undefined)
 
   const form: Form | undefined = storage.getForm(formIdParam)
   const formReady = !!form
@@ -457,7 +458,6 @@ export default function ResponsesPage() {
                               maxPoints={field.points || 1}
                               currentPoints={answerResult?.points || 0}
                               needsGrading={answerResult?.needsGrading ?? true}
-                              userId={user.id}
                             />
                           )}
                         </div>

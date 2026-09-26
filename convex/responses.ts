@@ -2,29 +2,36 @@ import { paginationOptsValidator } from "convex/server";
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
+import { getOwnedForm, requireOwnedForm } from "./authHelpers";
+import { gradeResponses, type AnswerResult } from "./grading";
 
-// Save a response
+// Public: a student submits their answers. Marking happens here, on the server,
+// so the score can't be forged and nothing is returned to the student.
 export const saveResponse = mutation({
   args: {
     formId: v.id("forms"),
     responses: v.any(),
     submittedAt: v.string(),
-    score: v.optional(v.number()),
-    maxScore: v.optional(v.number()),
-    answers: v.optional(v.any()),
     studentName: v.optional(v.string()),
     studentClass: v.optional(v.string()),
     tabSwitchCount: v.optional(v.number()),
     attachments: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("responses", {
+    const form = await ctx.db.get(args.formId);
+    if (!form) throw new Error("Form not found");
+
+    const graded = form.isQuiz
+      ? gradeResponses(form.fields, args.responses ?? {})
+      : null;
+
+    await ctx.db.insert("responses", {
       formId: args.formId,
       responses: args.responses,
       submittedAt: args.submittedAt,
-      score: args.score,
-      maxScore: args.maxScore,
-      answers: args.answers,
+      score: graded?.score,
+      maxScore: graded?.maxScore,
+      answers: graded?.answers,
       studentName: args.studentName,
       studentClass: args.studentClass,
       tabSwitchCount: args.tabSwitchCount,
@@ -33,22 +40,17 @@ export const saveResponse = mutation({
   },
 });
 
-// Manually grade an essay answer (teacher only, must own the form)
+// Tutor sets or overrides the mark for an essay answer (owner only)
 export const gradeEssayAnswer = mutation({
   args: {
     responseId: v.id("responses"),
     fieldId: v.string(),
     points: v.number(),
-    userId: v.string(),
   },
   handler: async (ctx, args) => {
     const response = await ctx.db.get(args.responseId);
     if (!response) throw new Error("Response not found");
-
-    const form = await ctx.db.get(response.formId);
-    if (!form || form.userId !== args.userId) {
-      throw new Error("Unauthorized");
-    }
+    const form = await requireOwnedForm(ctx, response.formId);
 
     const field = (form.fields as Array<{ id: string; points?: number }>).find(
       (f) => f.id === args.fieldId,
@@ -56,15 +58,16 @@ export const gradeEssayAnswer = mutation({
     const maxPoints = field?.points ?? 1;
     const clampedPoints = Math.max(0, Math.min(args.points, maxPoints));
 
-    const existingAnswers = { ...(response.answers || {}) };
+    const existingAnswers: Record<string, AnswerResult> = { ...(response.answers || {}) };
     existingAnswers[args.fieldId] = {
       ...existingAnswers[args.fieldId],
       points: clampedPoints,
       needsGrading: false,
+      autoGraded: false,
     };
 
     const newScore = Object.values(existingAnswers).reduce(
-      (sum: number, a: any) => sum + (a?.points || 0),
+      (sum, a) => sum + (a?.points || 0),
       0,
     );
 
@@ -75,35 +78,39 @@ export const gradeEssayAnswer = mutation({
   },
 });
 
-// Full list for a single form (export, one-shot fetch)
+async function ownedResponses(
+  ctx: Parameters<typeof getOwnedForm>[0],
+  formId: Doc<"forms">["_id"],
+) {
+  if (!(await getOwnedForm(ctx, formId))) return [];
+  return await ctx.db
+    .query("responses")
+    .withIndex("by_formId", (q) => q.eq("formId", formId))
+    .collect();
+}
+
+// Full list for a single form (export, one-shot fetch) — owner only
 export const getResponses = query({
   args: { formId: v.id("forms") },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("responses")
-      .withIndex("by_formId", (q) => q.eq("formId", args.formId))
-      .collect();
-  },
+  handler: async (ctx, args) => ownedResponses(ctx, args.formId),
 });
 
 /** @deprecated Legacy name — same as getResponses. Kept for older deployed clients. */
 export const getAllResponses = query({
   args: { formId: v.id("forms") },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("responses")
-      .withIndex("by_formId", (q) => q.eq("formId", args.formId))
-      .collect();
-  },
+  handler: async (ctx, args) => ownedResponses(ctx, args.formId),
 });
 
-/** Paginated responses for a form (indexed). */
+/** Paginated responses for a form (indexed) — owner only. */
 export const listResponsesByForm = query({
   args: {
     formId: v.id("forms"),
     paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx, args) => {
+    if (!(await getOwnedForm(ctx, args.formId))) {
+      return { page: [], isDone: true, continueCursor: "" };
+    }
     return await ctx.db
       .query("responses")
       .withIndex("by_formId", (q) => q.eq("formId", args.formId))
@@ -155,13 +162,7 @@ function statsFromRows(rows: Doc<"responses">[]) {
 
 export const getResponseStats = query({
   args: { formId: v.id("forms") },
-  handler: async (ctx, args) => {
-    const rows = await ctx.db
-      .query("responses")
-      .withIndex("by_formId", (q) => q.eq("formId", args.formId))
-      .collect();
-    return statsFromRows(rows);
-  },
+  handler: async (ctx, args) => statsFromRows(await ownedResponses(ctx, args.formId)),
 });
 
 export const getResponseStatsForForms = query({
@@ -169,10 +170,7 @@ export const getResponseStatsForForms = query({
   handler: async (ctx, args) => {
     const result: { formId: string; count: number }[] = [];
     for (const formId of args.formIds) {
-      const rows = await ctx.db
-        .query("responses")
-        .withIndex("by_formId", (q) => q.eq("formId", formId))
-        .collect();
+      const rows = await ownedResponses(ctx, formId);
       result.push({ formId, count: rows.length });
     }
     return result;

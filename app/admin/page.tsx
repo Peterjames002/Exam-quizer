@@ -6,13 +6,14 @@ import { useStorage } from '@/lib/storage'
 import { Download, ArrowLeft, Share2, Copy, Check } from 'lucide-react'
 import Link from 'next/link'
 import { useUser, SignOutButton } from '@clerk/nextjs'
-import { useConvex, usePaginatedQuery, useQuery } from 'convex/react'
+import { useConvex, useConvexAuth, usePaginatedQuery, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
 import { docToFormResponse } from '@/lib/mapConvexResponse'
 
 export default function AdminDashboard() {
   const { user, isLoaded } = useUser()
+  const { isAuthenticated: isConvexAuthed } = useConvexAuth()
   const storage = useStorage()
   const convex = useConvex()
   const [selectedFormId, setSelectedFormId] = useState<string | null>(null)
@@ -40,11 +41,11 @@ export default function AdminDashboard() {
 
   const ownerFormsRaw = useQuery(
     api.forms.getAllForms,
-    user?.id ? { userId: user.id } : 'skip',
+    isConvexAuthed ? {} : 'skip',
   )
   const forms = storage.getAllForms()
   const quizForms: Form[] = forms?.filter((f) => f.isQuiz) || []
-  const isOwnerFormsLoading = !!user?.id && ownerFormsRaw === undefined
+  const isOwnerFormsLoading = !!user?.id && (!isConvexAuthed || ownerFormsRaw === undefined)
   const selectedForm = selectedFormId ? quizForms.find((f) => f.id === selectedFormId) : null
 
   const formIdsConvex = useMemo(

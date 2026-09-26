@@ -20,7 +20,6 @@ export default function FormViewPage() {
   const storage = useStorage()
   const [responses, setResponses] = useState<Record<string, any>>({})
   const [attachments, setAttachments] = useState<Record<string, File>>({})
-  const [submittedResponse, setSubmittedResponse] = useState<FormResponse | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [studentName, setStudentName] = useState('')
@@ -163,7 +162,6 @@ export default function FormViewPage() {
     setAutoSubmitReason(reason)
     setIsSubmitting(true)
 
-    const { score, maxScore, answers } = calculateScore(form, responses)
     const uploadedAttachments = isPreview ? {} : await uploadStagedAttachments()
 
     const formResponse: FormResponse = {
@@ -171,9 +169,6 @@ export default function FormViewPage() {
       formId: form.id,
       responses,
       submittedAt: new Date().toISOString(),
-      score: form.isQuiz ? score : undefined,
-      maxScore: form.isQuiz ? maxScore : undefined,
-      answers: form.isQuiz ? answers : undefined,
       studentName: form.isQuiz ? studentName.trim() : undefined,
       studentClass: form.isQuiz ? studentClass.trim() : undefined,
       tabSwitchCount: form.isQuiz ? finalTabSwitchCount : undefined,
@@ -184,7 +179,6 @@ export default function FormViewPage() {
     if (!isPreview) {
       await storage.saveResponse(formResponse)
     }
-    setSubmittedResponse(formResponse)
     setIsSubmitting(false)
     setIsSubmitted(true)
   }
@@ -247,63 +241,6 @@ export default function FormViewPage() {
     }
   }
 
-  const calculateScore = (form: Form, responses: Record<string, any>) => {
-    if (!form.isQuiz) return { score: 0, maxScore: 0, answers: {} }
-
-    let totalScore = 0
-    let maxScore = 0
-    const answers: Record<string, { isCorrect: boolean; points: number; needsGrading?: boolean }> = {}
-
-    form.fields.forEach(field => {
-      if (!field.isQuiz) return
-
-      const points = field.points || 1
-      maxScore += points
-
-      if (field.type === 'essay') {
-        // Essay answers aren't auto-graded — teacher assigns points later
-        answers[field.id] = { isCorrect: false, points: 0, needsGrading: true }
-        return
-      }
-
-      const userAnswer = responses[field.id]
-      const correctAnswers = field.correctAnswers || []
-
-      let isCorrect = false
-
-      if (field.type === 'checkbox') {
-        // For checkboxes, check if all correct answers are selected and no incorrect ones
-        const userAnswers = Array.isArray(userAnswer) ? userAnswer : []
-        const correctSet = new Set(correctAnswers)
-        const userSet = new Set(userAnswers)
-        
-        isCorrect = 
-          userAnswers.length === correctAnswers.length &&
-          correctAnswers.every(ans => userSet.has(ans)) &&
-          userAnswers.every(ans => correctSet.has(ans))
-      } else if (field.type === 'radio' || field.type === 'select') {
-        // For radio/select, check if answer matches any correct answer
-        isCorrect = correctAnswers.includes(userAnswer)
-      } else {
-        // For text fields, check if answer matches (case-insensitive)
-        isCorrect = correctAnswers.some(correct => 
-          String(userAnswer).toLowerCase().trim() === String(correct).toLowerCase().trim()
-        )
-      }
-
-      if (isCorrect) {
-        totalScore += points
-      }
-
-      answers[field.id] = {
-        isCorrect,
-        points: isCorrect ? points : 0,
-      }
-    })
-
-    return { score: totalScore, maxScore, answers }
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -322,8 +259,6 @@ export default function FormViewPage() {
     hasAutoSubmittedRef.current = true
     setIsSubmitting(true)
 
-    // Calculate score if it's a quiz
-    const { score, maxScore, answers } = calculateScore(form, responses)
     const uploadedAttachments = isPreview ? {} : await uploadStagedAttachments()
 
     const formResponse: FormResponse = {
@@ -331,9 +266,6 @@ export default function FormViewPage() {
       formId: form.id,
       responses,
       submittedAt: new Date().toISOString(),
-      score: form.isQuiz ? score : undefined,
-      maxScore: form.isQuiz ? maxScore : undefined,
-      answers: form.isQuiz ? answers : undefined,
       studentName: form.isQuiz ? studentName.trim() : undefined,
       studentClass: form.isQuiz ? studentClass.trim() : undefined,
       tabSwitchCount: form.isQuiz ? tabSwitchCount : undefined,
@@ -344,7 +276,6 @@ export default function FormViewPage() {
     if (!isPreview) {
       await storage.saveResponse(formResponse)
     }
-    setSubmittedResponse(formResponse)
     setIsSubmitting(false)
     setIsSubmitted(true)
   }
@@ -379,11 +310,6 @@ export default function FormViewPage() {
   }
 
   if (isSubmitted && form) {
-    const showResults = form.isQuiz && submittedResponse
-    const score = submittedResponse?.score || 0
-    const maxScore = submittedResponse?.maxScore || 0
-    const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0
-
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
@@ -417,28 +343,13 @@ export default function FormViewPage() {
                   Time&apos;s up! This quiz was automatically submitted.
                 </p>
               )}
-              {showResults && (
-                <div className="mt-4">
-                  <div className="text-4xl font-bold text-blue-600 mb-2">
-                    {score} / {maxScore}
-                  </div>
-                  <div className="text-lg text-gray-600 mb-4">
-                    {percentage}% Correct
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-3 max-w-md mx-auto">
-                    <div
-                      className={`h-3 rounded-full transition-all ${
-                        percentage >= 80 ? 'bg-green-500' :
-                        percentage >= 60 ? 'bg-yellow-500' :
-                        'bg-red-500'
-                      }`}
-                      style={{ width: `${percentage}%` }}
-                    ></div>
-                  </div>
-                </div>
+              {form.isQuiz && (
+                <p className="text-gray-600 mt-2">
+                  Your answers have been sent to your tutor. Results will be shared by your tutor.
+                </p>
               )}
             </div>
-            {!showResults && (
+            {!form.isQuiz && (
               <p className="text-gray-600 text-center mb-6">
                 Thank you for your response. Your submission has been recorded.
               </p>
@@ -454,31 +365,6 @@ export default function FormViewPage() {
             </div>
           </div>
 
-          {showResults && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Quiz Results</h2>
-              <div className="space-y-6">
-                {form.fields.map((field) => {
-                  if (field.type === 'textblock') return null
-                  
-                  const userAnswer = responses[field.id]
-                  const answerResult = submittedResponse?.answers?.[field.id]
-                  const isCorrect = answerResult?.isCorrect || false
-
-                  return (
-                    <FieldRenderer
-                      key={field.id}
-                      field={field}
-                      value={userAnswer}
-                      showResults={true}
-                      isCorrect={isCorrect}
-                      questionNumber={questionNumbers.get(field.id)}
-                    />
-                  )
-                })}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     )

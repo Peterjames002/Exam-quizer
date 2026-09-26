@@ -11,7 +11,6 @@ interface EssayGraderProps {
   maxPoints: number
   currentPoints: number
   needsGrading: boolean
-  userId: string
 }
 
 export default function EssayGrader({
@@ -20,7 +19,6 @@ export default function EssayGrader({
   maxPoints,
   currentPoints,
   needsGrading,
-  userId,
 }: EssayGraderProps) {
   const gradeEssayAnswer = useMutation(api.responses.gradeEssayAnswer)
   const [points, setPoints] = useState(currentPoints)
@@ -29,7 +27,7 @@ export default function EssayGrader({
   const handleSave = async () => {
     setSaving(true)
     try {
-      await gradeEssayAnswer({ responseId, fieldId, points, userId })
+      await gradeEssayAnswer({ responseId, fieldId, points })
     } finally {
       setSaving(false)
     }

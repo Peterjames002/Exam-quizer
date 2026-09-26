@@ -1,6 +1,8 @@
 'use client'
 
-import { ConvexProvider, ConvexReactClient } from 'convex/react'
+import { ConvexReactClient } from 'convex/react'
+import { ConvexProviderWithClerk } from 'convex/react-clerk'
+import { useAuth } from '@clerk/nextjs'
 import { useMemo } from 'react'
 
 function isValidConvexUrl(url: string | undefined): boolean {
@@ -38,6 +40,11 @@ export function ConvexClientProvider({ children }: { children: React.ReactNode }
 
   // Always render ConvexProvider to prevent hook errors
   // Components using Convex hooks will work, but mutations/queries will fail gracefully
-  // The error boundary will catch and display configuration messages when needed
-  return <ConvexProvider client={client}>{children}</ConvexProvider>
+  // The error boundary will catch and display configuration messages when needed.
+  // WithClerk attaches the signed-in user's Clerk token so Convex can verify them.
+  return (
+    <ConvexProviderWithClerk client={client} useAuth={useAuth}>
+      {children}
+    </ConvexProviderWithClerk>
+  )
 }
