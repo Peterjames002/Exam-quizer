@@ -8,10 +8,14 @@ import FieldRenderer from '@/components/FieldRenderer'
 import { ArrowLeft, Send, CheckCircle, Clock, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { v4 as uuidv4 } from 'uuid'
-import { useQuery } from 'convex/react'
+import { useMutation, useQuery } from 'convex/react'
+import { ConvexError } from 'convex/values'
 import { api } from '@/convex/_generated/api'
 import { Id } from '@/convex/_generated/dataModel'
 import { agentDebugIngestJson } from '@/lib/agentDebugIngest'
+
+// Mirrors LINK_OPEN_MINUTES in convex/exams.ts (shown to students only)
+const LINK_OPEN_MINUTES = 5
 
 export default function FormViewPage() {
   const params = useParams()
@@ -33,6 +37,14 @@ export default function FormViewPage() {
   const pasteAttemptsRef = useRef(0)
   const [autoSubmitReason, setAutoSubmitReason] = useState<'timer' | 'tab-switch' | null>(null)
   const hasAutoSubmittedRef = useRef(false)
+  // Exam session from exams.startExam; kept in sessionStorage so a reload mid-exam
+  // doesn't send the student back to an (possibly expired) start screen
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [isStarting, setIsStarting] = useState(false)
+  const [startError, setStartError] = useState<string | null>(null)
+  const [now, setNow] = useState(() => Date.now())
+  const startExam = useMutation(api.exams.startExam)
+  const sessionKey = `exam-session-${formId}`
 
   // "Preview" opens a form/[id] tab without ever saving to the database — the
   // in-progress fields are handed over via sessionStorage instead of a real ID
@@ -49,6 +61,18 @@ export default function FormViewPage() {
     }
   }, [isPreview])
 
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(sessionKey)
+      if (saved) {
+        setSessionId(saved)
+        setShowQuiz(true)
+      }
+    } catch {
+      // sessionStorage unavailable (private mode) — student just starts normally
+    }
+  }, [sessionKey])
+
   // Try to get form from user's forms first (if signed in)
   const userForm = storage.getForm(formId)
 
@@ -57,7 +81,9 @@ export default function FormViewPage() {
   const shouldQueryPublic = !userForm && !isPreview && formId && formId.length > 10
   const convexForm = useQuery(
     api.forms.getForm,
-    shouldQueryPublic ? { id: formId as Id<"forms"> } : "skip"
+    shouldQueryPublic
+      ? { id: formId as Id<"forms">, sessionId: (sessionId ?? undefined) as Id<"examSessions"> | undefined }
+      : "skip"
   )
 
   const form = userForm || previewForm || (convexForm ? {
@@ -66,12 +92,64 @@ export default function FormViewPage() {
     description: convexForm.description,
     isQuiz: convexForm.isQuiz,
     timerMinutes: convexForm.timerMinutes,
+    linkExpiresAt: convexForm.linkExpiresAt,
     fields: convexForm.fields,
     createdAt: convexForm.createdAt,
     updatedAt: convexForm.updatedAt,
   } : null)
 
   const isLoading = isPreview ? !previewForm : (!userForm && convexForm === undefined)
+
+  // Students only: the owner and previews are never locked out
+  const enforcesLink = !!form?.isQuiz && !userForm && !isPreview
+  const linkOpen = !!form?.linkExpiresAt && now <= form.linkExpiresAt
+
+  // Tick while waiting on the start screen so the link closes on time
+  useEffect(() => {
+    if (!enforcesLink || showQuiz) return
+    const interval = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(interval)
+  }, [enforcesLink, showQuiz])
+
+  // A remembered session that's no longer valid (already submitted, or the form
+  // was reset) returns no questions — drop it and show the start screen again
+  useEffect(() => {
+    if (sessionId && enforcesLink && convexForm && convexForm.fields.length === 0) {
+      try { sessionStorage.removeItem(sessionKey) } catch {}
+      setSessionId(null)
+      setShowQuiz(false)
+    }
+  }, [sessionId, enforcesLink, convexForm, sessionKey])
+
+  const handleStart = async () => {
+    if (!form) return
+    if (!studentName.trim() || !studentClass.trim()) {
+      alert('Please enter your name and class')
+      return
+    }
+    if (isPreview) {
+      setShowQuiz(true)
+      return
+    }
+    setIsStarting(true)
+    setStartError(null)
+    try {
+      const id = await startExam({
+        formId: form.id as Id<'forms'>,
+        studentName: studentName.trim(),
+        studentClass: studentClass.trim(),
+      })
+      try { sessionStorage.setItem(sessionKey, id) } catch {}
+      setSessionId(id)
+      setShowQuiz(true)
+    } catch (err) {
+      setStartError(
+        err instanceof ConvexError ? String(err.data) : 'Could not start the exam. Please try again.',
+      )
+    } finally {
+      setIsStarting(false)
+    }
+  }
 
   // Sequential question numbers, skipping text blocks (which aren't questions)
   const questionNumbers = useMemo(() => {
@@ -113,14 +191,15 @@ export default function FormViewPage() {
     if (!form?.isQuiz || !form?.timerMinutes || !showQuiz || timerStarted || isTimerExpired) {
       return
     }
+    // Wait until the questions have arrived
+    if (form.fields.length === 0) return
 
-    // Initialize timer when quiz starts
-    if (!timerStarted && showQuiz) {
-      const totalSeconds = form.timerMinutes * 60
-      setTimeRemaining(totalSeconds)
-      setTimerStarted(true)
-    }
-  }, [form, showQuiz, timerStarted, isTimerExpired])
+    // Count from when the server recorded Start, so reloading doesn't reset it
+    const startedAt = convexForm?.sessionStartedAt
+    const elapsed = startedAt ? Math.floor((Date.now() - startedAt) / 1000) : 0
+    setTimeRemaining(Math.max(1, form.timerMinutes * 60 - elapsed))
+    setTimerStarted(true)
+  }, [form, showQuiz, timerStarted, isTimerExpired, convexForm?.sessionStartedAt])
 
   // Timer countdown logic
   useEffect(() => {
@@ -147,7 +226,7 @@ export default function FormViewPage() {
     const result: Record<string, string> = {}
     for (const [fieldId, file] of Object.entries(attachments)) {
       try {
-        result[fieldId] = await storage.uploadFile(file)
+        result[fieldId] = await storage.uploadFile(file, form!.id, sessionId ?? undefined)
       } catch (err) {
         console.error('Failed to upload attachment for field', fieldId, err)
       }
@@ -176,11 +255,20 @@ export default function FormViewPage() {
       tabSwitchCount: form.isQuiz ? finalTabSwitchCount : undefined,
       pasteAttempts: form.isQuiz ? pasteAttemptsRef.current : undefined,
       attachments: Object.keys(uploadedAttachments).length > 0 ? uploadedAttachments : undefined,
+      sessionId: sessionId ?? undefined,
     }
 
     // Preview submissions are never persisted — nothing real to save them against
     if (!isPreview) {
-      await storage.saveResponse(formResponse)
+      try {
+        await storage.saveResponse(formResponse)
+        try { sessionStorage.removeItem(sessionKey) } catch {}
+      } catch (err) {
+        setIsSubmitting(false)
+        alert(err instanceof ConvexError ? String(err.data) : 'Submission failed. Please check your connection and try again.')
+        hasAutoSubmittedRef.current = false
+        return
+      }
     }
     setIsSubmitting(false)
     setIsSubmitted(true)
@@ -274,11 +362,20 @@ export default function FormViewPage() {
       tabSwitchCount: form.isQuiz ? tabSwitchCount : undefined,
       pasteAttempts: form.isQuiz ? pasteAttemptsRef.current : undefined,
       attachments: Object.keys(uploadedAttachments).length > 0 ? uploadedAttachments : undefined,
+      sessionId: sessionId ?? undefined,
     }
 
     // Preview submissions are never persisted — nothing real to save them against
     if (!isPreview) {
-      await storage.saveResponse(formResponse)
+      try {
+        await storage.saveResponse(formResponse)
+        try { sessionStorage.removeItem(sessionKey) } catch {}
+      } catch (err) {
+        setIsSubmitting(false)
+        alert(err instanceof ConvexError ? String(err.data) : 'Submission failed. Please check your connection and try again.')
+        hasAutoSubmittedRef.current = false
+        return
+      }
     }
     setIsSubmitting(false)
     setIsSubmitted(true)
@@ -394,9 +491,25 @@ export default function FormViewPage() {
             Preview mode — nothing you submit here is saved
           </div>
         )}
-        {!showQuiz && form.isQuiz && (
+        {!showQuiz && form.isQuiz && enforcesLink && !linkOpen && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-6 text-center">
+            <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">This exam link has expired</h2>
+            <p className="text-gray-600">
+              The link had to be opened and started within {LINK_OPEN_MINUTES} minutes of being shared.
+              Ask your tutor to share it again.
+            </p>
+          </div>
+        )}
+
+        {!showQuiz && form.isQuiz && (!enforcesLink || linkOpen) && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Student Information</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Student Information</h2>
+            {enforcesLink && form.linkExpiresAt && (
+              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-6">
+                Start within {formatTime(Math.max(0, Math.floor((form.linkExpiresAt - now) / 1000)))} — after that this link expires.
+              </p>
+            )}
             <div className="space-y-4">
               <div>
                 <label htmlFor="student-name" className="block text-sm font-medium text-gray-700 mb-2">
@@ -428,24 +541,16 @@ export default function FormViewPage() {
                   required
                 />
               </div>
+              {startError && (
+                <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{startError}</p>
+              )}
               <button
                 type="button"
-                onClick={() => {
-                  // #region agent log
-                  agentDebugIngestJson({location:'app/form/[id]/page.tsx:329',message:'Start Quiz button clicked',data:{studentName:studentName.trim(),studentClass:studentClass.trim(),hasName:!!studentName.trim(),hasClass:!!studentClass.trim(),formIsQuiz:form?.isQuiz,showQuiz},runId:'run1',hypothesisId:'A'});
-                  // #endregion
-                  if (studentName.trim() && studentClass.trim()) {
-                    // #region agent log
-                    agentDebugIngestJson({location:'app/form/[id]/page.tsx:332',message:'Setting showQuiz to true',data:{studentName:studentName.trim(),studentClass:studentClass.trim()},runId:'run1',hypothesisId:'A'});
-                    // #endregion
-                    setShowQuiz(true)
-                  } else {
-                    alert('Please enter your name and class')
-                  }
-                }}
-                className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                onClick={handleStart}
+                disabled={isStarting}
+                className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium"
               >
-                Start Quiz
+                {isStarting ? 'Starting…' : 'Start Quiz'}
               </button>
             </div>
           </div>

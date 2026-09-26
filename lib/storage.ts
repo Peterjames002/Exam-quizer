@@ -72,6 +72,7 @@ export function useStorage() {
             description: found.description,
             isQuiz: found.isQuiz,
             timerMinutes: found.timerMinutes,
+            linkExpiresAt: found.linkExpiresAt,
             fields: found.fields,
             createdAt: found.createdAt,
             updatedAt: found.updatedAt,
@@ -94,6 +95,7 @@ export function useStorage() {
           description: f.description,
           isQuiz: f.isQuiz,
           timerMinutes: f.timerMinutes,
+          linkExpiresAt: f.linkExpiresAt,
           fields: f.fields,
           createdAt: f.createdAt,
           updatedAt: f.updatedAt,
@@ -139,12 +141,19 @@ export function useStorage() {
         tabSwitchCount: response.tabSwitchCount,
         pasteAttempts: response.pasteAttempts,
         attachments: response.attachments,
+        sessionId: response.sessionId as Id<"examSessions"> | undefined,
+        cameraPhotos: response.cameraPhotos as Id<"_storage">[] | undefined,
+        cameraStatus: response.cameraStatus,
       })
     },
 
     // Uploads a file to Convex storage and returns its storage id
-    uploadFile: async (file: File): Promise<string> => {
-      const uploadUrl = await generateUploadUrl()
+    // (formId/sessionId: quiz uploads are only allowed during a started exam)
+    uploadFile: async (file: Blob, formId: string, sessionId?: string): Promise<string> => {
+      const uploadUrl = await generateUploadUrl({
+        formId: formId as Id<"forms">,
+        sessionId: sessionId as Id<"examSessions"> | undefined,
+      })
       const result = await fetch(uploadUrl, {
         method: 'POST',
         headers: { 'Content-Type': file.type },

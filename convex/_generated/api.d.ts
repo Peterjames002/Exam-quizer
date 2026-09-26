@@ -9,6 +9,7 @@
  */
 
 import type * as authHelpers from "../authHelpers.js";
+import type * as exams from "../exams.js";
 import type * as files from "../files.js";
 import type * as forms from "../forms.js";
 import type * as grading from "../grading.js";
@@ -22,6 +23,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   authHelpers: typeof authHelpers;
+  exams: typeof exams;
   files: typeof files;
   forms: typeof forms;
   grading: typeof grading;

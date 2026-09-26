@@ -10,6 +10,7 @@ import { useConvex, useConvexAuth, usePaginatedQuery, useQuery } from 'convex/re
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
 import { docToFormResponse } from '@/lib/mapConvexResponse'
+import { useShareLink } from '@/lib/useShareLink'
 
 export default function AdminDashboard() {
   const { user, isLoaded } = useUser()
@@ -20,23 +21,12 @@ export default function AdminDashboard() {
   const [copied, setCopied] = useState(false)
   const [exporting, setExporting] = useState(false)
 
+  const shareLink = useShareLink()
   const handleCopyLink = async () => {
     if (!selectedFormId) return
-    const formUrl = `${window.location.origin}/form/${selectedFormId}`
-    try {
-      await navigator.clipboard.writeText(formUrl)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      const textArea = document.createElement('textarea')
-      textArea.value = formUrl
-      document.body.appendChild(textArea)
-      textArea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textArea)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
+    await shareLink(selectedFormId)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   const ownerFormsRaw = useQuery(
@@ -312,7 +302,7 @@ export default function AdminDashboard() {
                   {copied ? (
                     <>
                       <Check className="w-5 h-5" />
-                      Link Copied!
+                      Copied — open 5 min
                     </>
                   ) : (
                     <>

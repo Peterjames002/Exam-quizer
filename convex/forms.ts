@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { getUserId, requireOwnedForm, requireUserId } from "./authHelpers";
+import { getOwnedForm, getUserId, requireOwnedForm, requireUserId } from "./authHelpers";
+import { getActiveSession } from "./exams";
 import { stripAnswerKey } from "./grading";
 
 // Save or update a form owned by the signed-in tutor
@@ -57,16 +58,30 @@ export const saveForm = mutation({
   },
 });
 
-// Public: what a student sees when taking the exam — no answer key.
+// Public: what a student sees when taking the exam — never the answer key.
+// A quiz's questions are only returned once the student has started a session
+// (see exams.startExam), so an expired link shows nothing but the title.
 export const getForm = query({
-  args: { id: v.id("forms") },
+  args: {
+    id: v.id("forms"),
+    sessionId: v.optional(v.id("examSessions")),
+  },
   handler: async (ctx, args) => {
     const form = await ctx.db.get(args.id);
     if (!form) return null;
     const { userId: _owner, ...rest } = form;
+
+    const session = await getActiveSession(ctx, args.id, args.sessionId);
+    const canSeeQuestions =
+      !form.isQuiz || !!session || !!(await getOwnedForm(ctx, args.id));
+
     return {
       ...rest,
-      fields: form.fields.map((f) => stripAnswerKey(f)) as typeof form.fields,
+      // Lets the quiz timer survive a page reload without restarting
+      sessionStartedAt: session?.startedAt,
+      fields: canSeeQuestions
+        ? (form.fields.map((f) => stripAnswerKey(f)) as typeof form.fields)
+        : [],
     };
   },
 });
@@ -106,7 +121,18 @@ export const deleteForm = mutation({
       .withIndex("by_formId", (q) => q.eq("formId", args.id))
       .collect();
     for (const response of responses) {
+      for (const photo of response.cameraPhotos ?? []) {
+        await ctx.storage.delete(photo);
+      }
       await ctx.db.delete(response._id);
+    }
+
+    const sessions = await ctx.db
+      .query("examSessions")
+      .withIndex("by_formId", (q) => q.eq("formId", args.id))
+      .collect();
+    for (const session of sessions) {
+      await ctx.db.delete(session._id);
     }
 
     await ctx.db.delete(args.id);

@@ -15,5 +15,8 @@ export function docToFormResponse(doc: Doc<'responses'>): FormResponse {
     tabSwitchCount: doc.tabSwitchCount,
     pasteAttempts: doc.pasteAttempts,
     attachments: doc.attachments,
+    sessionId: doc.sessionId,
+    cameraPhotos: doc.cameraPhotos,
+    cameraStatus: doc.cameraStatus as FormResponse['cameraStatus'],
   }
 }

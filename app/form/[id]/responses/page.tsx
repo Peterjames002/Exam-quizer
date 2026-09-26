@@ -13,6 +13,8 @@ import type { Id } from '@/convex/_generated/dataModel'
 import { docToFormResponse } from '@/lib/mapConvexResponse'
 import EssayGrader from '@/components/EssayGrader'
 import AttachmentViewer from '@/components/AttachmentViewer'
+import LinkStatus from '@/components/LinkStatus'
+import { useShareLink } from '@/lib/useShareLink'
 
 export default function ResponsesPage() {
   const params = useParams()
@@ -74,22 +76,11 @@ export default function ResponsesPage() {
   const [exporting, setExporting] = useState(false)
   const [copied, setCopied] = useState(false)
 
+  const shareLink = useShareLink()
   const handleCopyLink = async () => {
-    const formUrl = `${window.location.origin}/form/${formIdParam}`
-    try {
-      await navigator.clipboard.writeText(formUrl)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      const textArea = document.createElement('textarea')
-      textArea.value = formUrl
-      document.body.appendChild(textArea)
-      textArea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textArea)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
+    await shareLink(formIdParam)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   const formatDate = (dateString: string) => {
@@ -222,7 +213,7 @@ export default function ResponsesPage() {
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
               <h3 className="text-sm font-semibold text-gray-900 mb-1">Share this Quiz</h3>
-              <p className="text-xs text-gray-600">Students can take this quiz without logging in</p>
+              <LinkStatus expiresAt={form.linkExpiresAt} />
             </div>
             <div className="flex items-center gap-3 flex-1 min-w-[300px] max-w-md">
               <input
@@ -239,7 +230,7 @@ export default function ResponsesPage() {
                 {copied ? (
                   <>
                     <Check className="w-4 h-4" />
-                    Copied!
+                    Copied — open 5 min
                   </>
                 ) : (
                   <>
@@ -310,7 +301,7 @@ export default function ResponsesPage() {
                 {copied ? (
                   <>
                     <Check className="w-5 h-5" />
-                    Link Copied!
+                    Copied — open 5 min
                   </>
                 ) : (
                   <>

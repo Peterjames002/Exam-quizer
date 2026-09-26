@@ -8,6 +8,7 @@ import { SignInButton, SignUpButton, UserButton, useUser } from '@clerk/nextjs'
 import { useStorage } from '@/lib/storage'
 import { Form } from '@/types/form'
 import { agentDebugIngestJson } from '@/lib/agentDebugIngest'
+import { useShareLink } from '@/lib/useShareLink'
 
 export default function Home() {
   const router = useRouter()
@@ -36,23 +37,11 @@ export default function Home() {
     }
   }
 
+  const shareLink = useShareLink()
   const handleShare = async (formId: string) => {
-    const formUrl = `${window.location.origin}/form/${formId}`
-    try {
-      await navigator.clipboard.writeText(formUrl)
-      setCopiedFormId(formId)
-      setTimeout(() => setCopiedFormId(null), 2000)
-    } catch (err) {
-      // Fallback for older browsers
-      const textArea = document.createElement('textarea')
-      textArea.value = formUrl
-      document.body.appendChild(textArea)
-      textArea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textArea)
-      setCopiedFormId(formId)
-      setTimeout(() => setCopiedFormId(null), 2000)
-    }
+    await shareLink(formId)
+    setCopiedFormId(formId)
+    setTimeout(() => setCopiedFormId(null), 2000)
   }
 
   const formatDate = (dateString: string) => {

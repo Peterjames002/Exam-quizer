@@ -1,10 +1,21 @@
 import { mutation, query } from "./_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
+import { getActiveSession } from "./exams";
 
-// Get a short-lived URL the client can POST a file to directly
+// Get a short-lived URL the client can POST a file to directly. Only students
+// in a live exam session upload (essay attachments, camera photos); forms that
+// aren't quizzes have no session and accept uploads as before.
 export const generateUploadUrl = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    formId: v.id("forms"),
+    sessionId: v.optional(v.id("examSessions")),
+  },
+  handler: async (ctx, args) => {
+    const form = await ctx.db.get(args.formId);
+    if (!form) throw new ConvexError("Form not found");
+    if (form.isQuiz && !(await getActiveSession(ctx, args.formId, args.sessionId))) {
+      throw new ConvexError("No active exam session");
+    }
     return await ctx.storage.generateUploadUrl();
   },
 });

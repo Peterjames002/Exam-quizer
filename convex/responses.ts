@@ -1,9 +1,10 @@
 import { paginationOptsValidator } from "convex/server";
 import { mutation, query } from "./_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { getOwnedForm, requireOwnedForm } from "./authHelpers";
 import { gradeResponses, type AnswerResult } from "./grading";
+import { getActiveSession } from "./exams";
 
 // Public: a student submits their answers. Marking happens here, on the server,
 // so the score can't be forged and nothing is returned to the student.
@@ -17,10 +18,24 @@ export const saveResponse = mutation({
     tabSwitchCount: v.optional(v.number()),
     pasteAttempts: v.optional(v.number()),
     attachments: v.optional(v.any()),
+    sessionId: v.optional(v.id("examSessions")),
+    cameraPhotos: v.optional(v.array(v.id("_storage"))),
+    cameraStatus: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const form = await ctx.db.get(args.formId);
     if (!form) throw new Error("Form not found");
+
+    // Quizzes only accept one submission per started session
+    const session = await getActiveSession(ctx, args.formId, args.sessionId);
+    if (form.isQuiz && !session) {
+      throw new ConvexError(
+        "This exam session is no longer valid, or was already submitted.",
+      );
+    }
+    if (session) {
+      await ctx.db.patch(session._id, { submittedAt: Date.now() });
+    }
 
     const graded = form.isQuiz
       ? gradeResponses(form.fields, args.responses ?? {})
@@ -33,11 +48,15 @@ export const saveResponse = mutation({
       score: graded?.score,
       maxScore: graded?.maxScore,
       answers: graded?.answers,
-      studentName: args.studentName,
-      studentClass: args.studentClass,
+      // From the session, so they can't be changed after Start
+      studentName: session?.studentName ?? args.studentName,
+      studentClass: session?.studentClass ?? args.studentClass,
       tabSwitchCount: args.tabSwitchCount,
       pasteAttempts: args.pasteAttempts,
       attachments: args.attachments,
+      sessionId: session?._id,
+      cameraPhotos: args.cameraPhotos,
+      cameraStatus: args.cameraStatus,
     });
   },
 });

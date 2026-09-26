@@ -37,6 +37,7 @@ export interface Form {
   description?: string
   isQuiz?: boolean // Whether this form is a quiz/test
   timerMinutes?: number // Timer in minutes for quiz (optional)
+  linkExpiresAt?: number // ms epoch; students must press Start before this
   fields: FormField[]
   createdAt: string
   updatedAt: string
@@ -62,4 +63,7 @@ export interface FormResponse {
   tabSwitchCount?: number // Number of times the student left the quiz tab
   pasteAttempts?: number // Number of blocked pastes into essay answers
   attachments?: Record<string, string> // fieldId -> Convex storage id, for essay answers with a photo/file attached
+  sessionId?: string // Exam session created when the student pressed Start
+  cameraPhotos?: string[] // Convex storage ids of webcam snapshots
+  cameraStatus?: 'on' | 'blocked' | 'unavailable'
 }
