@@ -137,6 +137,7 @@ export function useStorage() {
         studentName: response.studentName,
         studentClass: response.studentClass,
         tabSwitchCount: response.tabSwitchCount,
+        pasteAttempts: response.pasteAttempts,
         attachments: response.attachments,
       })
     },

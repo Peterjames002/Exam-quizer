@@ -25,9 +25,16 @@ export default function FieldEditor({
 }: FieldEditorProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [localField, setLocalField] = useState(field)
+  // Kept as raw text so commas can be typed; split into keywords on save
+  const [keywordsText, setKeywordsText] = useState(field.keywords?.join(', ') ?? '')
 
   const handleSave = () => {
-    onUpdate(localField)
+    if (localField.type === 'essay') {
+      const keywords = keywordsText.split(',').map((k) => k.trim()).filter(Boolean)
+      onUpdate({ ...localField, keywords: keywords.length > 0 ? keywords : undefined })
+    } else {
+      onUpdate(localField)
+    }
     setIsEditing(false)
   }
 
@@ -103,7 +110,7 @@ export default function FieldEditor({
                   <option value="select">Dropdown</option>
                   <option value="file">File Upload</option>
                   <option value="rating">Rating</option>
-                  <option value="essay">Essay / Long Answer (manually graded)</option>
+                  <option value="essay">Essay / Long Answer</option>
                   <option value="textblock">Text Block (Description)</option>
                 </select>
               </div>
@@ -290,6 +297,26 @@ export default function FieldEditor({
                 </div>
               )}
 
+              {localField.type === 'essay' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Marking keywords (optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={keywordsText}
+                    onChange={(e) => setKeywordsText(e.target.value)}
+                    placeholder="e.g. chlorophyll, sunlight, carbon dioxide"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Separate with commas. The essay is marked automatically by how many keywords appear —
+                    close forms and small spelling slips count (e.g. &quot;evaporate&quot; matches &quot;evaporation&quot;).
+                    Leave empty to mark by hand. You can adjust any mark afterwards.
+                  </p>
+                </div>
+              )}
+
               <div className="flex items-center gap-4">
                 <label className="flex items-center gap-2">
                   <input
@@ -381,7 +408,7 @@ export default function FieldEditor({
                   {field.isQuiz && (
                     <div className="mt-2">
                       <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                        {field.type === 'essay' ? 'Essay Question (manually graded)' : 'Quiz Question'} • {field.points || 1} point{(field.points || 1) !== 1 ? 's' : ''}
+                        {field.type === 'essay' ? (field.keywords?.length ? `Essay Question (auto-marked: ${field.keywords.length} keyword${field.keywords.length !== 1 ? 's' : ''})` : 'Essay Question (manually graded)') : 'Quiz Question'} • {field.points || 1} point{(field.points || 1) !== 1 ? 's' : ''}
                       </span>
                     </div>
                   )}

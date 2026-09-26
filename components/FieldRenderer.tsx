@@ -3,6 +3,7 @@
 import { FormField } from '@/types/form'
 import { Star } from 'lucide-react'
 import DrawingPad from './DrawingPad'
+import EssayTextarea from './EssayTextarea'
 
 interface FieldRendererProps {
   field: FormField
@@ -13,6 +14,7 @@ interface FieldRendererProps {
   questionNumber?: number // 1-based question number, omitted for text blocks
   onAttachmentSelect?: (file: File | null) => void // Essay questions only: optional photo/file attachment
   attachmentFileName?: string // Name of the currently staged attachment, if any
+  onPasteBlocked?: () => void // Essay questions only: a paste/drop into the answer was blocked
 }
 
 export default function FieldRenderer({
@@ -24,6 +26,7 @@ export default function FieldRenderer({
   questionNumber,
   onAttachmentSelect,
   attachmentFileName,
+  onPasteBlocked,
 }: FieldRendererProps) {
   const handleChange = (newValue: any) => {
     if (onChange) {
@@ -341,16 +344,14 @@ export default function FieldRenderer({
           {field.description && (
             <p className="text-sm text-gray-500 mb-2">{field.description}</p>
           )}
-          <textarea
+          <EssayTextarea
             id={field.id}
-            name={field.id}
             value={value || ''}
-            onChange={(e) => handleChange(e.target.value)}
+            onChange={handleChange}
             placeholder={field.placeholder || 'Write your answer...'}
             required={field.required}
-            rows={8}
             disabled={showResults}
-            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onPasteBlocked={onPasteBlocked}
           />
           {!showResults && onAttachmentSelect && (
             <div className="mt-3 space-y-3">

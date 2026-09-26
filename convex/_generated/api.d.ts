@@ -8,8 +8,10 @@
  * @module
  */
 
+import type * as authHelpers from "../authHelpers.js";
 import type * as files from "../files.js";
 import type * as forms from "../forms.js";
+import type * as grading from "../grading.js";
 import type * as responses from "../responses.js";
 
 import type {
@@ -19,8 +21,10 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  authHelpers: typeof authHelpers;
   files: typeof files;
   forms: typeof forms;
+  grading: typeof grading;
   responses: typeof responses;
 }>;
 

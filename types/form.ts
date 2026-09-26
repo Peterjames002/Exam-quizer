@@ -23,6 +23,7 @@ export interface FormField {
   isQuiz?: boolean // Whether this is an objective question with correct answers
   correctAnswers?: string[] // Correct answers for quiz questions
   points?: number // Points for this question (default: 1)
+  keywords?: string[] // Essay questions: auto-marked by how many of these appear (close forms count)
   validation?: {
     min?: number
     max?: number
@@ -52,9 +53,13 @@ export interface FormResponse {
     isCorrect?: boolean
     points?: number
     needsGrading?: boolean // True for essay answers awaiting manual grading
+    autoGraded?: boolean // Essay marked from the tutor's keywords
+    matchedKeywords?: string[]
+    missedKeywords?: string[]
   }> // Quiz answer results
   studentName?: string // Student's name
   studentClass?: string // Student's class
   tabSwitchCount?: number // Number of times the student left the quiz tab
+  pasteAttempts?: number // Number of blocked pastes into essay answers
   attachments?: Record<string, string> // fieldId -> Convex storage id, for essay answers with a photo/file attached
 }

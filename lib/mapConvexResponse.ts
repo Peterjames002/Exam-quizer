@@ -13,6 +13,7 @@ export function docToFormResponse(doc: Doc<'responses'>): FormResponse {
     studentName: doc.studentName,
     studentClass: doc.studentClass,
     tabSwitchCount: doc.tabSwitchCount,
+    pasteAttempts: doc.pasteAttempts,
     attachments: doc.attachments,
   }
 }

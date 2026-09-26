@@ -29,6 +29,8 @@ export default function FormViewPage() {
   const [timerStarted, setTimerStarted] = useState(false)
   const [isTimerExpired, setIsTimerExpired] = useState(false)
   const [tabSwitchCount, setTabSwitchCount] = useState(0)
+  // Ref, not state: the auto-submit paths read it from stale closures
+  const pasteAttemptsRef = useRef(0)
   const [autoSubmitReason, setAutoSubmitReason] = useState<'timer' | 'tab-switch' | null>(null)
   const hasAutoSubmittedRef = useRef(false)
 
@@ -172,6 +174,7 @@ export default function FormViewPage() {
       studentName: form.isQuiz ? studentName.trim() : undefined,
       studentClass: form.isQuiz ? studentClass.trim() : undefined,
       tabSwitchCount: form.isQuiz ? finalTabSwitchCount : undefined,
+      pasteAttempts: form.isQuiz ? pasteAttemptsRef.current : undefined,
       attachments: Object.keys(uploadedAttachments).length > 0 ? uploadedAttachments : undefined,
     }
 
@@ -269,6 +272,7 @@ export default function FormViewPage() {
       studentName: form.isQuiz ? studentName.trim() : undefined,
       studentClass: form.isQuiz ? studentClass.trim() : undefined,
       tabSwitchCount: form.isQuiz ? tabSwitchCount : undefined,
+      pasteAttempts: form.isQuiz ? pasteAttemptsRef.current : undefined,
       attachments: Object.keys(uploadedAttachments).length > 0 ? uploadedAttachments : undefined,
     }
 
@@ -527,6 +531,7 @@ export default function FormViewPage() {
                   questionNumber={questionNumbers.get(field.id)}
                   onAttachmentSelect={(file) => handleAttachmentChange(field.id, file)}
                   attachmentFileName={attachments[field.id]?.name}
+                  onPasteBlocked={() => { pasteAttemptsRef.current += 1 }}
                 />
               ))}
             </div>

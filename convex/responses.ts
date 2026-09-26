@@ -15,6 +15,7 @@ export const saveResponse = mutation({
     studentName: v.optional(v.string()),
     studentClass: v.optional(v.string()),
     tabSwitchCount: v.optional(v.number()),
+    pasteAttempts: v.optional(v.number()),
     attachments: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
@@ -35,6 +36,7 @@ export const saveResponse = mutation({
       studentName: args.studentName,
       studentClass: args.studentClass,
       tabSwitchCount: args.tabSwitchCount,
+      pasteAttempts: args.pasteAttempts,
       attachments: args.attachments,
     });
   },

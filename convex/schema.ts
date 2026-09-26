@@ -23,6 +23,7 @@ export default defineSchema({
     studentName: v.optional(v.string()),
     studentClass: v.optional(v.string()),
     tabSwitchCount: v.optional(v.number()),
+    pasteAttempts: v.optional(v.number()), // blocked pastes into essay answers
     attachments: v.optional(v.any()), // fieldId -> storage id, for essay answers with a photo/file attached
   }).index("by_formId", ["formId"]),
 });

@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { Form } from '@/types/form'
 import { useStorage } from '@/lib/storage'
-import { ArrowLeft, Download, FileText, Share2, Copy, Check } from 'lucide-react'
+import { ArrowLeft, Download, FileText, Share2, Copy, Check, ChevronDown } from 'lucide-react'
 import Link from 'next/link'
 import { useUser } from '@clerk/nextjs'
 import { useConvex, useConvexAuth, usePaginatedQuery, useQuery } from 'convex/react'
@@ -22,6 +22,15 @@ export default function ResponsesPage() {
   const { isAuthenticated: isConvexAuthed } = useConvexAuth()
   const storage = useStorage()
   const convex = useConvex()
+  // Answers are collapsed by default; tutors open the ones they need
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  const toggleExpanded = (id: string) =>
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   const ownerForms = useQuery(
     api.forms.getAllForms,
@@ -321,15 +330,25 @@ export default function ResponsesPage() {
         ) : (
           <>
             <div className="space-y-6">
-              {responses.map((response, index) => (
+              {responses.map((response, index) => {
+                const isExpanded = expandedIds.has(response.id)
+                const essaysToGrade = Object.values(response.answers ?? {}).filter(
+                  (a) => a?.needsGrading,
+                ).length
+                return (
                 <div
                   key={response.id}
                   className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
                 >
-                  <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
+                  <div className={`flex items-start justify-between gap-4 ${isExpanded ? 'mb-4 pb-4 border-b border-gray-200' : ''}`}>
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900">
-                        Response #{index + 1}
+                        {response.studentName?.trim() || `Response #${index + 1}`}
+                        {response.studentClass?.trim() && (
+                          <span className="ml-2 text-sm font-normal text-gray-500">
+                            {response.studentClass}
+                          </span>
+                        )}
                       </h3>
                       {form.isQuiz && response.score !== undefined && (
                         <div className="mt-1 text-sm">
@@ -348,12 +367,34 @@ export default function ResponsesPage() {
                           ⚠ Auto-submitted — student left the quiz tab
                         </div>
                       )}
+                      {form.isQuiz && !!response.pasteAttempts && (
+                        <div className="mt-1 ml-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-0.5 inline-block">
+                          ⚠ Tried to paste into an essay {response.pasteAttempts}×
+                        </div>
+                      )}
+                      {essaysToGrade > 0 && (
+                        <div className="mt-1 ml-1 text-xs text-yellow-800 bg-yellow-100 border border-yellow-300 rounded px-2 py-0.5 inline-block">
+                          {essaysToGrade} essay{essaysToGrade !== 1 ? 's' : ''} to grade
+                        </div>
+                      )}
                     </div>
-                    <span className="text-sm text-gray-500">
-                      {formatDate(response.submittedAt)}
-                    </span>
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                      <span className="text-sm text-gray-500">
+                        {formatDate(response.submittedAt)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(response.id)}
+                        aria-expanded={isExpanded}
+                        className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
+                      >
+                        {isExpanded ? 'Hide answers' : 'Show answers'}
+                        <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                      </button>
+                    </div>
                   </div>
 
+                  {isExpanded && (
                   <div className="space-y-4">
                     {form.fields.map((field) => {
                       if (field.type === 'textblock') return null
@@ -445,6 +486,20 @@ export default function ResponsesPage() {
                               </div>
                             )}
 
+                          {field.type === 'essay' && answerResult?.autoGraded && (
+                            <div className="mt-3 pt-3 border-t border-gray-300 text-sm">
+                              <div className="text-gray-700">
+                                Keyword marking: {answerResult.points}/{field.points || 1} pts
+                              </div>
+                              {!!answerResult.matchedKeywords?.length && (
+                                <div className="text-green-700">✓ Found: {answerResult.matchedKeywords.join(', ')}</div>
+                              )}
+                              {!!answerResult.missedKeywords?.length && (
+                                <div className="text-red-700">✗ Missing: {answerResult.missedKeywords.join(', ')}</div>
+                              )}
+                            </div>
+                          )}
+
                           {field.type === 'essay' && response.attachments?.[field.id] && (
                             <div className="mt-3 pt-3 border-t border-gray-300">
                               <AttachmentViewer storageId={response.attachments[field.id]} />
@@ -457,15 +512,17 @@ export default function ResponsesPage() {
                               fieldId={field.id}
                               maxPoints={field.points || 1}
                               currentPoints={answerResult?.points || 0}
-                              needsGrading={answerResult?.needsGrading ?? true}
+                              needsGrading={answerResult ? !!answerResult.needsGrading : true}
                             />
                           )}
                         </div>
                       )
                     })}
                   </div>
+                  )}
                 </div>
-              ))}
+                )
+              })}
             </div>
 
             {pageStatus === 'CanLoadMore' && (
