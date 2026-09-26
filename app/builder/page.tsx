@@ -14,7 +14,7 @@ export default function BuilderPage() {
   const router = useRouter()
   const { user, isLoaded } = useUser()
   const storage = useStorage()
-  const [formTitle, setFormTitle] = useState('Untitled Form')
+  const [formTitle, setFormTitle] = useState('Untitled Exam')
   const [formDescription, setFormDescription] = useState('')
   const [isQuiz, setIsQuiz] = useState(false)
   const [timerMinutes, setTimerMinutes] = useState<number | undefined>(undefined)
@@ -114,20 +114,20 @@ export default function BuilderPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <div className="bg-white border-b border-gray-200 sticky top-16 z-30">
         <div className="max-w-6xl mx-auto px-4 py-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <Link
-              href="/"
+              href="/prepare"
               className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
             >
               <ArrowLeft className="w-5 h-5" />
-              <span>Back to Home</span>
+              <span>Back to Prepare Exams</span>
             </Link>
-            <div className="flex items-center gap-2 flex-wrap justify-end">
+            <div className="flex w-full sm:w-auto gap-2">
               <button
                 onClick={handlePreview}
-                className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 <Eye className="w-4 h-4" />
                 Preview
@@ -135,39 +135,39 @@ export default function BuilderPage() {
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
                 <Save className="w-4 h-4" />
-                {isSaving ? 'Saving...' : 'Save Form'}
+                {isSaving ? 'Saving...' : 'Save Exam'}
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-6">
+      <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 sm:p-8 mb-6">
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Form Title *
+              Exam Title *
             </label>
             <input
               type="text"
               value={formTitle}
               onChange={(e) => setFormTitle(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-2xl font-semibold"
-              placeholder="Enter form title"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xl sm:text-2xl font-semibold"
+              placeholder="Enter exam title"
             />
           </div>
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Form Description
+              Instructions for Students
             </label>
             <textarea
               value={formDescription}
               onChange={(e) => setFormDescription(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter form description (optional)"
+              placeholder="Optional instructions shown to students"
               rows={3}
             />
           </div>
@@ -180,13 +180,13 @@ export default function BuilderPage() {
               className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
             />
             <label htmlFor="isQuiz" className="text-sm font-medium text-gray-700 cursor-pointer">
-              This is a Quiz/Test (allows setting correct answers and scoring)
+              This is an exam (set correct answers and scoring)
             </label>
           </div>
           {isQuiz && (
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Quiz Timer (minutes) - Optional
+                Exam Timer (minutes) — optional
               </label>
               <input
                 type="number"
@@ -211,27 +211,27 @@ export default function BuilderPage() {
 
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-900">Form Fields</h2>
+            <h2 className="text-xl font-semibold text-gray-900">Questions</h2>
             <div className="flex gap-2">
               <button
                 onClick={() => addField('text')}
                 className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <Plus className="w-4 h-4 inline mr-1" />
-                Add Field
+                Add Question
               </button>
             </div>
           </div>
 
           {fields.length === 0 ? (
-            <div className="bg-white rounded-lg border-2 border-dashed border-gray-300 p-12 text-center">
-              <p className="text-gray-500 mb-4">No fields yet. Add your first field to get started!</p>
+            <div className="bg-white rounded-lg border-2 border-dashed border-gray-300 p-6 sm:p-12 text-center">
+              <p className="text-gray-500 mb-4">No questions yet. Add your first question to get started.</p>
               <button
                 onClick={() => addField('text')}
                 className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <Plus className="w-5 h-5" />
-                Add First Field
+                Add First Question
               </button>
             </div>
           ) : (
@@ -257,7 +257,7 @@ export default function BuilderPage() {
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Add Fields</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Add Questions</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {(['text', 'textarea', 'email', 'number', 'date', 'radio', 'checkbox', 'select', 'essay', 'textblock'] as FieldType[]).map((type) => (
               <button

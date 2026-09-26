@@ -1,368 +1,228 @@
-'use client'
-
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { FileText, NotebookPen, Upload, Lock, Trash2, Eye, Share2, Copy, Check, ShieldCheck, BarChart3, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
-import { SignInButton, SignUpButton, UserButton, useUser } from '@clerk/nextjs'
-import { useStorage } from '@/lib/storage'
-import { Form } from '@/types/form'
-import { agentDebugIngestJson } from '@/lib/agentDebugIngest'
-import { useShareLink } from '@/lib/useShareLink'
+import {
+  ArrowRight,
+  BarChart3,
+  Camera,
+  ChevronDown,
+  Clock,
+  FileText,
+  NotebookPen,
+  ShieldCheck,
+  Sparkles,
+} from 'lucide-react'
 
-export default function Home() {
-  const router = useRouter()
-  const { isSignedIn, user, isLoaded } = useUser()
-  const storage = useStorage()
-  
-  // #region agent log
-  useEffect(() => {
-    agentDebugIngestJson({location:'app/page.tsx:16',message:'Clerk useUser hook result',data:{isLoaded,isSignedIn,hasUser:!!user,userId:user?.id || 'NONE',userEmail:user?.emailAddresses?.[0]?.emailAddress || 'NONE'},runId:'run1',hypothesisId:'B'})
-    
-    // Track Clerk script loading errors
-    window.addEventListener('error', (event) => {
-      if (event.message && event.message.includes('clerk')) {
-        agentDebugIngestJson({location:'app/page.tsx:22',message:'Clerk script loading error detected',data:{errorMessage:event.message,errorSource:event.filename || 'NONE',errorLine:event.lineno || 'NONE',errorCol:event.colno || 'NONE'},runId:'run1',hypothesisId:'E'})
-      }
-    }, true)
-  }, [isLoaded, isSignedIn, user])
-  // #endregion
-  const forms = storage.getAllForms()
-  const isLoading = forms === undefined
-  const [copiedFormId, setCopiedFormId] = useState<string | null>(null)
+const FEATURES = [
+  {
+    icon: FileText,
+    color: 'bg-green-100 text-green-700',
+    title: 'Import from Word or PDF',
+    body: 'Upload one document with your questions and answers. Objective and essay questions are built for you — no retyping.',
+  },
+  {
+    icon: Sparkles,
+    color: 'bg-blue-100 text-blue-700',
+    title: 'Smart essay marking',
+    body: 'Give each essay a few keywords. Answers are marked by how many appear — close word forms and small spelling slips still count.',
+  },
+  {
+    icon: Clock,
+    color: 'bg-amber-100 text-amber-700',
+    title: 'Time-limited links',
+    body: 'A shared exam link stays open for 5 minutes. Students who don’t start in time are locked out; you can reopen it anytime.',
+  },
+  {
+    icon: Camera,
+    color: 'bg-purple-100 text-purple-700',
+    title: 'Camera monitoring',
+    body: 'The webcam turns on during the exam and photos are taken at random moments, so you can see who is writing.',
+  },
+  {
+    icon: ShieldCheck,
+    color: 'bg-red-100 text-red-700',
+    title: 'Anti-cheating built in',
+    body: 'No copying questions or pasting answers, and leaving the exam tab submits it. Scores are calculated on the server.',
+  },
+  {
+    icon: BarChart3,
+    color: 'bg-teal-100 text-teal-700',
+    title: 'Results in one place',
+    body: 'See each student by name and matric number, review flags, adjust marks and export everything to CSV.',
+  },
+]
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this form?')) {
-      await storage.deleteForm(id)
-    }
-  }
+const STEPS = [
+  { title: 'Prepare', body: 'Upload a Word/PDF document or write questions in the builder.' },
+  { title: 'Share', body: 'Copy the exam link and send it to your students — they don’t need an account.' },
+  { title: 'Review', body: 'Scores come in automatically. Check essays, photos and flags, then export.' },
+]
 
-  const shareLink = useShareLink()
-  const handleShare = async (formId: string) => {
-    await shareLink(formId)
-    setCopiedFormId(formId)
-    setTimeout(() => setCopiedFormId(null), 2000)
-  }
+const FAQS = [
+  {
+    q: 'Do students need an account?',
+    a: 'No. Students open the link, enter their full name and matriculation number, and start. Only tutors sign in.',
+  },
+  {
+    q: 'Why does my exam link say it has expired?',
+    a: 'Links stay open for 5 minutes after you copy them, so everyone starts together. Copy the link again from Prepare Exams to reopen it for another 5 minutes.',
+  },
+  {
+    q: 'How are essays marked?',
+    a: 'If you give an essay question keywords, it is marked by the share of keywords the student uses — “evaporate” also matches “evaporation”. Without keywords you mark it yourself. You can change any mark afterwards.',
+  },
+  {
+    q: 'Do students see their score?',
+    a: 'No. Students only see that their exam was submitted. You decide when and how to share results.',
+  },
+  {
+    q: 'Why does the browser ask for camera permission?',
+    a: 'Every browser requires a student to allow camera access once — no website can switch a camera on silently. After they allow it, the browser remembers the choice for future exams. If the camera is blocked, the exam still runs and the response is flagged for you.',
+  },
+  {
+    q: 'How do I put answers in my Word document?',
+    a: 'Write “Answer: B” under an objective question, and “Keywords: …” (optionally “Points: 10”) under an essay question. The upload page has a full example.',
+  },
+]
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  }
-
+export default function HomePage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Header with Auth */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
-          <div className="text-center md:text-left">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 mb-2">
-              Quiz Builder
-            </h1>
-            <p className="text-base sm:text-lg md:text-xl text-gray-600">
-              Create objective or essay-based quizzes for any subject. Upload Word documents with 50+ questions or write essay questions manually.
-            </p>
-          </div>
-          <div className="flex items-center justify-end gap-3 flex-wrap">
-            {isLoaded && (
-              isSignedIn ? (
-                <div className="flex items-center gap-2 flex-wrap justify-end">
-                  <span className="text-sm text-gray-600 hidden md:block">
-                    {user?.emailAddresses[0]?.emailAddress}
-                  </span>
-                  <UserButton />
-                </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  {/* #region agent log */}
-                  <Link 
-                    href="/sign-in"
-                    onClick={() => {
-                      agentDebugIngestJson({location:'app/page.tsx:92',message:'Sign-in link clicked',data:{clerkPublishableKey:process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.substring(0,20) || 'MISSING',isLoaded,isSignedIn},runId:'run1',hypothesisId:'A'})
-                    }}
-                  >
-                    <button className="px-4 py-2 text-gray-700 hover:text-gray-900 font-medium">
-                      Sign In
-                    </button>
-                  </Link>
-                  {/* #endregion */}
-                  <Link href="/sign-up">
-                    <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
-                      Sign Up
-                    </button>
-                  </Link>
-                </div>
-              )
-            )}
-          </div>
-        </div>
-
-        {!isLoaded ? (
-          <div className="flex justify-center py-16">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          </div>
-        ) : !isSignedIn ? (
-          <LandingContent />
-        ) : (
-        <>
-        <div className="w-full max-w-4xl mx-auto grid gap-4 sm:grid-cols-2">
-          <Link
-            href="/essay-builder"
-            className="group bg-white rounded-xl shadow-lg p-8 hover:shadow-xl transition-all duration-300 hover:scale-105 cursor-pointer"
-          >
-            <div className="flex flex-col items-center text-center">
-              <div className="bg-blue-100 rounded-full p-4 mb-4 group-hover:bg-blue-200 transition-colors">
-                <NotebookPen className="w-12 h-12 text-blue-600" />
-              </div>
-              <h2 className="text-2xl font-semibold text-gray-900 mb-2">
-                Essay Builder
-              </h2>
-              <p className="text-gray-600">
-                Write essay/long-answer questions for any subject — Physics, Maths, and more. Students type answers, you grade manually
-              </p>
-            </div>
-          </Link>
-
-          <Link
-            href="/upload"
-            className="group bg-white rounded-xl shadow-lg p-8 hover:shadow-xl transition-all duration-300 hover:scale-105 cursor-pointer"
-          >
-            <div className="flex flex-col items-center text-center">
-              <div className="bg-green-100 rounded-full p-4 mb-4 group-hover:bg-green-200 transition-colors">
-                <Upload className="w-12 h-12 text-green-600" />
-              </div>
-              <h2 className="text-2xl font-semibold text-gray-900 mb-2">
-                Upload Quiz Document
-              </h2>
-              <p className="text-gray-600">
-                Upload a Word document with objective questions (A, B, C, D) and we'll automatically build your quiz
-              </p>
-            </div>
-          </Link>
-        </div>
-
-        {/* Forms List */}
-        <div className="max-w-6xl mx-auto mt-12 px-2 sm:px-4">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-3xl font-bold text-gray-900">Your Forms</h2>
-              <Link
-                href="/admin"
-                className="inline-flex items-center gap-2 text-purple-600 hover:text-purple-700 font-medium"
-              >
-                <Lock className="w-5 h-5" />
-                Admin Dashboard
-              </Link>
-            </div>
-
-            {isLoading ? (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p className="text-gray-600">Loading forms...</p>
-              </div>
-            ) : !forms || forms.length === 0 ? (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-                <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                  No forms yet
-                </h3>
-                <p className="text-gray-600 mb-6">
-                  Get started by creating your first form using the options above
-                </p>
-              </div>
-            ) : (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {forms.map((form) => (
-                  <div
-                    key={form.id}
-                    className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                          {form.title}
-                        </h3>
-                        {form.description && (
-                          <p className="text-sm text-gray-600 line-clamp-2">
-                            {form.description}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
-                      <FileText className="w-4 h-4" />
-                      <span>{form.fields.length} field{form.fields.length !== 1 ? 's' : ''}</span>
-                      {form.isQuiz && (
-                        <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
-                          Quiz
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="text-xs text-gray-500 mb-4">
-                      Created: {formatDate(form.createdAt)}
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Link
-                        href={`/form/${form.id}`}
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                      >
-                        <Eye className="w-4 h-4" />
-                        View
-                      </Link>
-                      <button
-                        onClick={() => handleShare(form.id)}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                        title="Copy shareable link"
-                      >
-                        {copiedFormId === form.id ? (
-                          <Check className="w-4 h-4" />
-                        ) : (
-                          <Share2 className="w-4 h-4" />
-                        )}
-                      </button>
-                      <Link
-                        href={`/form/${form.id}/responses`}
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
-                      >
-                        Responses
-                      </Link>
-                      <button
-                        onClick={() => handleDelete(form.id)}
-                        className="px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-        </div>
-        </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function LandingContent() {
-  const features = [
-    {
-      icon: NotebookPen,
-      color: 'blue',
-      title: 'Essay Questions',
-      description:
-        'Students type answers, draw calculations/diagrams right in the browser, or attach a photo of handwritten work. You grade each one manually.',
-    },
-    {
-      icon: Upload,
-      color: 'green',
-      title: 'Import from Word or PDF',
-      description:
-        'Upload a document with 50+ objective questions (A, B, C, D) and the quiz builds itself — no manual entry.',
-    },
-    {
-      icon: ShieldCheck,
-      color: 'purple',
-      title: 'Built-in Anti-Cheat',
-      description:
-        'Copying questions is blocked, and switching tabs during a quiz auto-submits it — no browser extensions required.',
-    },
-    {
-      icon: BarChart3,
-      color: 'orange',
-      title: 'Instant Grading & Stats',
-      description:
-        'Objective questions grade themselves the moment a student submits. Export results to CSV anytime.',
-    },
-  ]
-
-  const colorClasses: Record<string, string> = {
-    blue: 'bg-blue-100 text-blue-600',
-    green: 'bg-green-100 text-green-600',
-    purple: 'bg-purple-100 text-purple-600',
-    orange: 'bg-orange-100 text-orange-600',
-  }
-
-  return (
-    <div className="mt-4">
-      {/* Primary CTA */}
-      <div className="text-center mb-16">
-        <div className="flex items-center justify-center gap-3 flex-wrap">
-          <Link href="/sign-up">
-            <button className="inline-flex items-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-lg transition-colors">
-              Get Started Free
+    <div>
+      {/* Hero */}
+      <section className="bg-gradient-to-b from-blue-50 to-gray-50">
+        <div className="max-w-6xl mx-auto px-4 pt-14 pb-16 sm:pt-20 sm:pb-24 text-center">
+          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-sm font-medium mb-6">
+            <NotebookPen className="w-4 h-4" />
+            Online exams for schools and universities
+          </span>
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-gray-900 text-balance">
+            Set, share and mark exams — <span className="text-blue-600">in minutes</span>
+          </h1>
+          <p className="mt-6 max-w-2xl mx-auto text-lg sm:text-xl text-gray-600 text-balance">
+            Turn a Word document into an online exam, share a link that expires, and let the system mark objective
+            and essay answers for you.
+          </p>
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Link
+              href="/prepare"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-lg transition-colors"
+            >
+              Prepare Exams
               <ArrowRight className="w-5 h-5" />
-            </button>
-          </Link>
-          <Link href="/sign-in">
-            <button className="px-8 py-3 text-gray-700 hover:text-gray-900 font-medium text-lg">
-              Sign In
-            </button>
-          </Link>
-        </div>
-      </div>
-
-      {/* Feature grid */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
-        {features.map((feature) => (
-          <div
-            key={feature.title}
-            className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
-          >
-            <div className={`inline-flex items-center justify-center w-12 h-12 rounded-full mb-4 ${colorClasses[feature.color]}`}>
-              <feature.icon className="w-6 h-6" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">{feature.title}</h3>
-            <p className="text-sm text-gray-600">{feature.description}</p>
+            </Link>
+            <Link
+              href="#how"
+              className="w-full sm:w-auto inline-flex items-center justify-center px-7 py-3 rounded-lg border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 font-semibold text-lg"
+            >
+              How it works
+            </Link>
           </div>
-        ))}
-      </div>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="max-w-6xl mx-auto px-4 py-16">
+        <h2 className="text-3xl font-bold text-gray-900 text-center">Everything an exam needs</h2>
+        <p className="mt-3 text-gray-600 text-center max-w-2xl mx-auto">
+          Built with tutors and exam officers in mind — fair for students, fast for you.
+        </p>
+        <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {FEATURES.map((f) => (
+            <div key={f.title} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+              <div className={`inline-flex items-center justify-center w-11 h-11 rounded-lg ${f.color}`}>
+                <f.icon className="w-6 h-6" />
+              </div>
+              <h3 className="mt-4 text-lg font-semibold text-gray-900">{f.title}</h3>
+              <p className="mt-2 text-sm text-gray-600 leading-relaxed">{f.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* How it works */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-16">
-        <h2 className="text-2xl font-bold text-gray-900 text-center mb-8">How it works</h2>
-        <div className="grid sm:grid-cols-3 gap-8">
-          <div className="text-center">
-            <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-600 text-white font-bold mb-3">
-              1
-            </div>
-            <h3 className="font-semibold text-gray-900 mb-1">Build your quiz</h3>
-            <p className="text-sm text-gray-600">Write it manually or upload a Word/PDF document</p>
+      <section id="how" className="bg-white border-y border-gray-200">
+        <div className="max-w-6xl mx-auto px-4 py-16">
+          <h2 className="text-3xl font-bold text-gray-900 text-center">How it works</h2>
+          <ol className="mt-10 grid gap-8 md:grid-cols-3">
+            {STEPS.map((s, i) => (
+              <li key={s.title} className="text-center">
+                <span className="inline-flex items-center justify-center w-11 h-11 rounded-full bg-blue-600 text-white font-bold text-lg">
+                  {i + 1}
+                </span>
+                <h3 className="mt-4 text-lg font-semibold text-gray-900">{s.title}</h3>
+                <p className="mt-2 text-gray-600 max-w-xs mx-auto">{s.body}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      {/* About */}
+      <section id="about" className="max-w-6xl mx-auto px-4 py-16">
+        <div className="grid gap-10 md:grid-cols-2 md:items-center">
+          <div>
+            <h2 className="text-3xl font-bold text-gray-900">About Exam Builder</h2>
+            <p className="mt-4 text-gray-600 leading-relaxed">
+              Exam Builder helps tutors run fair exams online without the paperwork. Prepare questions the way you
+              already do — in a Word document — and the app turns them into an exam students can take on any phone or
+              laptop.
+            </p>
+            <p className="mt-4 text-gray-600 leading-relaxed">
+              Marking happens automatically: objective answers instantly, and essays by the keywords you choose.
+              Monitoring features like expiring links, camera photos and paste blocking keep results trustworthy.
+            </p>
           </div>
-          <div className="text-center">
-            <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-600 text-white font-bold mb-3">
-              2
-            </div>
-            <h3 className="font-semibold text-gray-900 mb-1">Share the link</h3>
-            <p className="text-sm text-gray-600">Students take it in the browser — no account needed</p>
-          </div>
-          <div className="text-center">
-            <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-600 text-white font-bold mb-3">
-              3
-            </div>
-            <h3 className="font-semibold text-gray-900 mb-1">Review results</h3>
-            <p className="text-sm text-gray-600">Objective questions auto-grade; essays you grade yourself</p>
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+            <dl className="grid grid-cols-2 gap-6 text-center">
+              <div>
+                <dt className="text-sm text-gray-500">Question types</dt>
+                <dd className="mt-1 text-2xl font-bold text-gray-900">Objective &amp; essay</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-gray-500">Link window</dt>
+                <dd className="mt-1 text-2xl font-bold text-gray-900">5 minutes</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-gray-500">Student sign-up</dt>
+                <dd className="mt-1 text-2xl font-bold text-gray-900">Not needed</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-gray-500">Results export</dt>
+                <dd className="mt-1 text-2xl font-bold text-gray-900">CSV</dd>
+              </div>
+            </dl>
           </div>
         </div>
-      </div>
+      </section>
+
+      {/* FAQ */}
+      <section id="faq" className="bg-white border-y border-gray-200">
+        <div className="max-w-3xl mx-auto px-4 py-16">
+          <h2 className="text-3xl font-bold text-gray-900 text-center">Frequently asked questions</h2>
+          <div className="mt-10 divide-y divide-gray-200 border-y border-gray-200">
+            {FAQS.map((f) => (
+              <details key={f.q} className="group py-4">
+                <summary className="flex items-center justify-between gap-4 cursor-pointer list-none font-medium text-gray-900">
+                  {f.q}
+                  <ChevronDown className="w-5 h-5 shrink-0 text-gray-500 transition-transform group-open:rotate-180" />
+                </summary>
+                <p className="mt-3 text-gray-600 leading-relaxed">{f.a}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* Closing CTA */}
-      <div className="text-center pb-4">
-        <p className="text-gray-600 mb-4">Free to use, set up in minutes.</p>
-        <Link href="/sign-up">
-          <button className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
-            Create Your First Quiz
-          </button>
+      <section className="max-w-6xl mx-auto px-4 py-16 text-center">
+        <h2 className="text-3xl font-bold text-gray-900">Ready to set your next exam?</h2>
+        <p className="mt-3 text-gray-600">Sign in and have your first exam ready to share in minutes.</p>
+        <Link
+          href="/prepare"
+          className="mt-6 inline-flex items-center gap-2 px-7 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-lg"
+        >
+          Prepare Exams
+          <ArrowRight className="w-5 h-5" />
         </Link>
-      </div>
+      </section>
     </div>
   )
 }

@@ -83,7 +83,7 @@ export default function FieldEditor({
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Field Type
+                  Question Type
                 </label>
                 <select
                   value={localField.type}

@@ -5,7 +5,7 @@ import { Form } from '@/types/form'
 import { useStorage } from '@/lib/storage'
 import { Download, ArrowLeft, Share2, Copy, Check } from 'lucide-react'
 import Link from 'next/link'
-import { useUser, SignOutButton } from '@clerk/nextjs'
+import { useUser } from '@clerk/nextjs'
 import { useConvex, useConvexAuth, usePaginatedQuery, useQuery } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
@@ -17,7 +17,7 @@ export default function AdminDashboard() {
   const { isAuthenticated: isConvexAuthed } = useConvexAuth()
   const storage = useStorage()
   const convex = useConvex()
-  const [selectedFormId, setSelectedFormId] = useState<string | null>(null)
+  const [pickedFormId, setSelectedFormId] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [exporting, setExporting] = useState(false)
 
@@ -35,6 +35,8 @@ export default function AdminDashboard() {
   )
   const forms = storage.getAllForms()
   const quizForms: Form[] = forms?.filter((f) => f.isQuiz) || []
+  // Show the first exam straight away until the tutor picks another
+  const selectedFormId = pickedFormId ?? quizForms[0]?.id ?? null
   const isOwnerFormsLoading = !!user?.id && (!isConvexAuthed || ownerFormsRaw === undefined)
   const selectedForm = selectedFormId ? quizForms.find((f) => f.id === selectedFormId) : null
 
@@ -85,7 +87,7 @@ export default function AdminDashboard() {
       const allResponses = rows.map(docToFormResponse)
       if (allResponses.length === 0) return
 
-      const headers = ['Name', 'Class', 'Score', 'Max Score', 'Percentage', 'Submitted At', 'Tab Switches']
+      const headers = ['Name', 'Matric No.', 'Score', 'Max Score', 'Percentage', 'Submitted At', 'Tab Switches']
       const csvRows = allResponses.map((response) => {
         const percentage =
           response.maxScore && response.maxScore > 0
@@ -155,63 +157,57 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 py-4">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-start md:items-center gap-4">
-              <Link
-                href="/"
-                className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+      <div className="bg-white border-b border-gray-200 sticky top-16 z-30">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+          <Link
+            href="/prepare"
+            className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            <span>Prepare Exams</span>
+          </Link>
+          {selectedFormId && (
+            <div className="flex w-full sm:w-auto gap-2">
+              <button
+                onClick={handleCopyLink}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                title="Copy shareable link (opens it for 5 minutes)"
               >
-                <ArrowLeft className="w-5 h-5" />
-                <span>Home</span>
-              </Link>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">My Admin Dashboard</h1>
-                <p className="text-sm text-gray-600">{user.emailAddresses[0]?.emailAddress}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 flex-wrap justify-end">
-              {selectedFormId && (
-                <button
-                  onClick={handleCopyLink}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  title="Copy shareable link"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="w-4 h-4" />
-                      Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Share2 className="w-4 h-4" />
-                      Share Link
-                    </>
-                  )}
-                </button>
-              )}
-              {selectedFormId && submissionTotal > 0 && (
+                {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+                {copied ? 'Copied — open 5 min' : 'Share link'}
+              </button>
+              {submissionTotal > 0 && (
                 <button
                   onClick={() => void exportToCSV()}
                   disabled={exporting}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 text-sm font-medium"
                 >
                   <Download className="w-4 h-4" />
                   {exporting ? 'Exporting…' : 'Export CSV'}
                 </button>
               )}
-              <SignOutButton>
-                <button className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
-                  Sign Out
-                </button>
-              </SignOutButton>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Results dashboard</h1>
+        <p className="mt-1 mb-6 text-gray-600">Pick an exam to see every student&apos;s score.</p>
+
+        {!isOwnerFormsLoading && quizForms.length === 0 && (
+          <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
+            <p className="font-medium text-gray-900">No exams yet</p>
+            <p className="mt-1 text-sm text-gray-600">Create an exam first — its results will appear here.</p>
+            <Link
+              href="/prepare"
+              className="mt-4 inline-flex items-center px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+            >
+              Prepare Exams
+            </Link>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {quizForms.map((form) => {
             const formId = form.id
@@ -235,15 +231,19 @@ export default function AdminDashboard() {
           })}
         </div>
 
+        {!selectedFormId && quizForms.length > 0 && (
+          <p className="text-center text-gray-500 py-8">Select an exam above to see its results.</p>
+        )}
+
         {selectedFormId && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             <div className="bg-blue-50 border-b border-blue-200 p-4">
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-900 mb-1">Share this Quiz</h3>
-                  <p className="text-xs text-gray-600">Students can take this quiz without logging in</p>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-1">Share this exam</h3>
+                  <p className="text-xs text-gray-600">Students don&apos;t need an account. Copying opens the link for 5 minutes.</p>
                 </div>
-                <div className="flex items-center gap-3 flex-1 min-w-[300px] max-w-md">
+                <div className="flex items-center gap-2 w-full sm:w-auto sm:flex-1 sm:max-w-md">
                   <input
                     type="text"
                     readOnly
@@ -258,7 +258,7 @@ export default function AdminDashboard() {
                     {copied ? (
                       <>
                         <Check className="w-4 h-4" />
-                        Copied!
+                        Copied
                       </>
                     ) : (
                       <>
@@ -271,12 +271,20 @@ export default function AdminDashboard() {
               </div>
             </div>
             <div className="p-4 border-b border-gray-200 bg-gray-50">
-              <h2 className="text-xl font-semibold text-gray-900">
-                {selectedForm?.title} - Results
-              </h2>
-              <p className="text-sm text-gray-600 mt-1">
-                {submissionTotal} submission{submissionTotal !== 1 ? 's' : ''}
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900 break-words">{selectedForm?.title}</h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {submissionTotal} submission{submissionTotal !== 1 ? 's' : ''}
+                  </p>
+                </div>
+                <Link
+                  href={`/form/${selectedFormId}/responses`}
+                  className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                >
+                  View answers, photos &amp; essay marking →
+                </Link>
+              </div>
             </div>
 
             {isOwnerFormsLoading ? (
@@ -293,7 +301,7 @@ export default function AdminDashboard() {
               <div className="p-12 text-center">
                 <p className="text-gray-600 mb-4">No submissions yet</p>
                 <p className="text-sm text-gray-500 mb-4">
-                  Share the quiz link with students to start collecting responses
+                  Share the exam link with students to start collecting responses
                 </p>
                 <button
                   onClick={handleCopyLink}
@@ -318,28 +326,28 @@ export default function AdminDashboard() {
                   <table className="w-full">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
                           #
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
                           Name
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
-                          Class
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                          Matric No.
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
                           Score
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
                           Max Score
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
                           Percentage
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
                           Submitted At
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                           Left Tab?
                         </th>
                       </tr>
@@ -354,22 +362,22 @@ export default function AdminDashboard() {
 
                         return (
                           <tr key={response.id} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
                               {index + 1}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 border-r border-gray-200">
+                            <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 border-r border-gray-200">
                               {response.studentName || 'N/A'}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
                               {response.studentClass || 'N/A'}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
                               {response.score || 0}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
                               {response.maxScore || 0}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm border-r border-gray-200">
+                            <td className="px-4 py-3 whitespace-nowrap text-sm border-r border-gray-200">
                               <span
                                 className={`px-2 py-1 rounded-full text-xs font-medium ${
                                   percentage >= 80
@@ -382,10 +390,10 @@ export default function AdminDashboard() {
                                 {percentage}%
                               </span>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 border-r border-gray-200">
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 border-r border-gray-200">
                               {date}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                               {response.tabSwitchCount ? (
                                 <span className="px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
                                   Yes — auto-submitted

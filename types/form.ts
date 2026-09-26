@@ -59,7 +59,7 @@ export interface FormResponse {
     missedKeywords?: string[]
   }> // Quiz answer results
   studentName?: string // Student's name
-  studentClass?: string // Student's class
+  studentClass?: string // Student's matriculation number (field kept as studentClass for existing data)
   tabSwitchCount?: number // Number of times the student left the quiz tab
   pasteAttempts?: number // Number of blocked pastes into essay answers
   attachments?: Record<string, string> // fieldId -> Convex storage id, for essay answers with a photo/file attached

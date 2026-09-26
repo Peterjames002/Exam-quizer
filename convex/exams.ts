@@ -53,7 +53,7 @@ export const startExam = mutation({
     const studentName = args.studentName.trim();
     const studentClass = args.studentClass.trim();
     if (!studentName || !studentClass) {
-      throw new ConvexError("Please enter your name and class.");
+      throw new ConvexError("Please enter your full name and matriculation number.");
     }
 
     return await ctx.db.insert("examSessions", {

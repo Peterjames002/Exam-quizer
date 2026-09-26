@@ -228,21 +228,21 @@ export default function UploadPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <div className="bg-white border-b border-gray-200 sticky top-16 z-30">
         <div className="max-w-6xl mx-auto px-4 py-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <Link
-              href="/"
+              href="/prepare"
               className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
             >
               <ArrowLeft className="w-5 h-5" />
-              <span>Back to Home</span>
+              <span>Back to Prepare Exams</span>
             </Link>
             {parsedFields.length > 0 && (
               <button
                 onClick={handleSave}
                 disabled={isUploading}
-                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
                 <Save className="w-4 h-4" />
                 {isUploading ? 'Saving...' : 'Save Quiz'}
@@ -252,15 +252,15 @@ export default function UploadPage() {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8">
         {parsedFields.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-12">
             <div className="text-center mb-8">
               <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-100 rounded-full mb-4">
                 <Upload className="w-10 h-10 text-blue-600" />
               </div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                Upload Quiz Document
+                Upload Exam Document
               </h1>
               <p className="text-gray-600">
                 Upload a Word document with objective (A, B, C, D) and essay questions — answers can be in the same document
@@ -380,7 +380,7 @@ Points: 10`}</pre>
           </div>
         ) : (
           <>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 sm:p-8 mb-6">
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Quiz Title *
@@ -389,7 +389,7 @@ Points: 10`}</pre>
                   type="text"
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-2xl font-semibold"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xl sm:text-2xl font-semibold"
                   placeholder="Enter quiz title"
                 />
               </div>
@@ -420,7 +420,7 @@ Points: 10`}</pre>
               {isQuiz && (
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Quiz Timer (minutes) - Optional
+                    Exam Timer (minutes) — optional
                   </label>
                   <input
                     type="number"

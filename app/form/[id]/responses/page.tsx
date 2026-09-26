@@ -105,10 +105,16 @@ export default function ResponsesPage() {
       const allResponses = rows.map(docToFormResponse)
       if (allResponses.length === 0) return
 
-      const headers = ['Submission Date', ...form.fields.map((f) => f.label)]
+      const headers = [
+        'Name',
+        'Matric No.',
+        'Submission Date',
+        ...(form.isQuiz ? ['Score', 'Max Score'] : []),
+        ...form.fields.filter((f) => f.type !== 'textblock').map((f) => f.label),
+      ]
       const rowsCsv = allResponses.map((response) => {
         const date = formatDate(response.submittedAt)
-        const values = form.fields.map((field) => {
+        const values = form.fields.filter((f) => f.type !== 'textblock').map((field) => {
           const value = response.responses[field.id]
           if (Array.isArray(value)) {
             return value.join('; ')
@@ -118,7 +124,13 @@ export default function ResponsesPage() {
           }
           return value || ''
         })
-        return [date, ...values]
+        return [
+          response.studentName || '',
+          response.studentClass || '',
+          date,
+          ...(form.isQuiz ? [response.score ?? '', response.maxScore ?? ''] : []),
+          ...values,
+        ]
       })
 
       const csvContent = [
@@ -166,11 +178,11 @@ export default function ResponsesPage() {
             The form you&apos;re looking for doesn&apos;t exist or you don&apos;t have access.
           </p>
           <Link
-            href="/"
+            href="/prepare"
             className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
-            Back to Home
+            Back to Prepare Exams
           </Link>
         </div>
       </div>
@@ -183,22 +195,22 @@ export default function ResponsesPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
+      <div className="bg-white border-b border-gray-200 sticky top-16 z-30">
+        <div className="max-w-6xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
             <Link
-              href={`/form/${formIdParam}`}
+              href="/prepare"
               className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
             >
               <ArrowLeft className="w-5 h-5" />
-              <span>Back to Form</span>
+              <span>Prepare Exams</span>
             </Link>
             <div className="flex items-center gap-3">
               {totalCount > 0 && (
                 <button
                   onClick={() => void exportToCSV()}
                   disabled={exporting}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
                 >
                   <Download className="w-4 h-4" />
                   {exporting ? 'Exporting…' : 'Export CSV'}
@@ -209,34 +221,34 @@ export default function ResponsesPage() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8">
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
-              <h3 className="text-sm font-semibold text-gray-900 mb-1">Share this Quiz</h3>
+              <h3 className="text-sm font-semibold text-gray-900 mb-1">Share this exam</h3>
               <LinkStatus expiresAt={form.linkExpiresAt} />
             </div>
-            <div className="flex items-center gap-3 flex-1 min-w-[300px] max-w-md">
+            <div className="flex items-center gap-2 w-full sm:w-auto sm:flex-1 sm:max-w-md">
               <input
                 type="text"
                 readOnly
                 value={`${typeof window !== 'undefined' ? window.location.origin : ''}/form/${formIdParam}`}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm"
+                className="min-w-0 flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm"
                 onClick={(e) => (e.target as HTMLInputElement).select()}
               />
               <button
                 onClick={handleCopyLink}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
+                className="shrink-0 flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
               >
                 {copied ? (
                   <>
                     <Check className="w-4 h-4" />
-                    Copied — open 5 min
+                    Copied
                   </>
                 ) : (
                   <>
                     <Copy className="w-4 h-4" />
-                    Copy Link
+                    Copy
                   </>
                 )}
               </button>
@@ -253,7 +265,7 @@ export default function ResponsesPage() {
           </p>
           {showQuizStats && stats && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h3 className="font-semibold text-gray-900 mb-2">Quiz Statistics</h3>
+              <h3 className="font-semibold text-gray-900 mb-2">Exam Statistics</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div>
                   <div className="text-gray-600">Average Score</div>
@@ -283,12 +295,12 @@ export default function ResponsesPage() {
         </div>
 
         {pageStatus === 'LoadingFirstPage' && responses.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-12 text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <p className="text-gray-600">Loading responses...</p>
           </div>
         ) : totalCount === 0 ? (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-12 text-center">
             <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-gray-900 mb-2">No responses yet</h2>
             <p className="text-gray-600 mb-6">
@@ -332,13 +344,13 @@ export default function ResponsesPage() {
                   key={response.id}
                   className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
                 >
-                  <div className={`flex items-start justify-between gap-4 ${isExpanded ? 'mb-4 pb-4 border-b border-gray-200' : ''}`}>
+                  <div className={`flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 ${isExpanded ? 'mb-4 pb-4 border-b border-gray-200' : ''}`}>
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900">
                         {response.studentName?.trim() || `Response #${index + 1}`}
                         {response.studentClass?.trim() && (
-                          <span className="ml-2 text-sm font-normal text-gray-500">
-                            {response.studentClass}
+                          <span className="block text-sm font-normal text-gray-500">
+                            Matric No. {response.studentClass}
                           </span>
                         )}
                       </h3>
@@ -375,7 +387,7 @@ export default function ResponsesPage() {
                         </div>
                       )}
                     </div>
-                    <div className="flex flex-col items-end gap-2 shrink-0">
+                    <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0">
                       <span className="text-sm text-gray-500">
                         {formatDate(response.submittedAt)}
                       </span>
