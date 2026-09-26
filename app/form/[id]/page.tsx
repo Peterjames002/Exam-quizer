@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { Form, FormResponse } from '@/types/form'
 import { useStorage } from '@/lib/storage'
 import FieldRenderer from '@/components/FieldRenderer'
+import ExamCamera, { type CameraStatus } from '@/components/ExamCamera'
 import { ArrowLeft, Send, CheckCircle, Clock, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { v4 as uuidv4 } from 'uuid'
@@ -35,6 +36,8 @@ export default function FormViewPage() {
   const [tabSwitchCount, setTabSwitchCount] = useState(0)
   // Ref, not state: the auto-submit paths read it from stale closures
   const pasteAttemptsRef = useRef(0)
+  const cameraPhotosRef = useRef<string[]>([])
+  const cameraStatusRef = useRef<CameraStatus | undefined>(undefined)
   const [autoSubmitReason, setAutoSubmitReason] = useState<'timer' | 'tab-switch' | null>(null)
   const hasAutoSubmittedRef = useRef(false)
   // Exam session from exams.startExam; kept in sessionStorage so a reload mid-exam
@@ -256,6 +259,8 @@ export default function FormViewPage() {
       pasteAttempts: form.isQuiz ? pasteAttemptsRef.current : undefined,
       attachments: Object.keys(uploadedAttachments).length > 0 ? uploadedAttachments : undefined,
       sessionId: sessionId ?? undefined,
+      cameraPhotos: cameraPhotosRef.current.length > 0 ? cameraPhotosRef.current : undefined,
+      cameraStatus: cameraStatusRef.current,
     }
 
     // Preview submissions are never persisted — nothing real to save them against
@@ -363,6 +368,8 @@ export default function FormViewPage() {
       pasteAttempts: form.isQuiz ? pasteAttemptsRef.current : undefined,
       attachments: Object.keys(uploadedAttachments).length > 0 ? uploadedAttachments : undefined,
       sessionId: sessionId ?? undefined,
+      cameraPhotos: cameraPhotosRef.current.length > 0 ? cameraPhotosRef.current : undefined,
+      cameraStatus: cameraStatusRef.current,
     }
 
     // Preview submissions are never persisted — nothing real to save them against
@@ -555,6 +562,14 @@ export default function FormViewPage() {
             </div>
           </div>
         )}
+
+        <ExamCamera
+          active={!!form.isQuiz && showQuiz && !isPreview && !isSubmitted && form.fields.length > 0}
+          durationMinutes={form.timerMinutes}
+          upload={(photo) => storage.uploadFile(photo, form.id, sessionId ?? undefined)}
+          onPhoto={(id) => { cameraPhotosRef.current = [...cameraPhotosRef.current, id] }}
+          onStatus={(status) => { cameraStatusRef.current = status }}
+        />
 
         {showQuiz && (
           <form

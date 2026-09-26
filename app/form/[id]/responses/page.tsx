@@ -14,6 +14,7 @@ import { docToFormResponse } from '@/lib/mapConvexResponse'
 import EssayGrader from '@/components/EssayGrader'
 import AttachmentViewer from '@/components/AttachmentViewer'
 import LinkStatus from '@/components/LinkStatus'
+import CameraPhoto from '@/components/CameraPhoto'
 import { useShareLink } from '@/lib/useShareLink'
 
 export default function ResponsesPage() {
@@ -363,6 +364,11 @@ export default function ResponsesPage() {
                           ⚠ Tried to paste into an essay {response.pasteAttempts}×
                         </div>
                       )}
+                      {form.isQuiz && (response.cameraStatus === 'blocked' || response.cameraStatus === 'unavailable') && (
+                        <div className="mt-1 ml-1 text-xs text-red-700 bg-red-50 border border-red-200 rounded px-2 py-0.5 inline-block">
+                          ⚠ {response.cameraStatus === 'blocked' ? 'Student blocked the camera' : 'No camera available'}
+                        </div>
+                      )}
                       {essaysToGrade > 0 && (
                         <div className="mt-1 ml-1 text-xs text-yellow-800 bg-yellow-100 border border-yellow-300 rounded px-2 py-0.5 inline-block">
                           {essaysToGrade} essay{essaysToGrade !== 1 ? 's' : ''} to grade
@@ -384,6 +390,17 @@ export default function ResponsesPage() {
                       </button>
                     </div>
                   </div>
+
+                  {isExpanded && !!response.cameraPhotos?.length && (
+                    <div className="mb-4">
+                      <div className="text-sm font-semibold text-gray-700 mb-2">Camera photos during the exam</div>
+                      <div className="flex gap-3 flex-wrap">
+                        {response.cameraPhotos.map((photoId, i) => (
+                          <CameraPhoto key={photoId} storageId={photoId} label={`Photo ${i + 1} of ${response.studentName || 'student'}`} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {isExpanded && (
                   <div className="space-y-4">
