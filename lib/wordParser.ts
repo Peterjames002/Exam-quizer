@@ -103,12 +103,14 @@ export function parseQuestionsFromPlainText(text: string): FormField[] {
   // First pass: Detect answer key sections and populate answer key map
   let answerKeyMap: Map<number, string> = new Map() // Map question number to answer letter
   let inAnswerKeySection = false
+  const keyLineIdx = new Set<number>() // Answer-key lines, skipped when parsing questions
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
-    
+
     // Check if this is an answer key section header
     if (line.match(/^(ANSWERS?|ANSWER\s+KEY|SOLUTIONS?|KEY):?$/i)) {
       inAnswerKeySection = true
+      keyLineIdx.add(i)
       continue
     }
     
@@ -120,9 +122,11 @@ export function parseQuestionsFromPlainText(text: string): FormField[] {
         const questionNum = parseInt(numberedAnswerMatch[1])
         const answerLetter = numberedAnswerMatch[2].toUpperCase()
         answerKeyMap.set(questionNum, answerLetter)
+        // Only a bare "1. C" is certainly a key line (not "1. Canada is...")
+        if (line.match(/^\d+[.)]\s*[A-Za-z]\s*$/)) keyLineIdx.add(i)
         continue
       }
-      
+
       // Pattern 2: "1-C" or "1-C, 2-B, 3-A" (comma-separated)
       const commaSeparatedMatch = line.match(/(\d+)-([A-Za-z])/gi)
       if (commaSeparatedMatch) {
@@ -134,6 +138,7 @@ export function parseQuestionsFromPlainText(text: string): FormField[] {
             answerKeyMap.set(questionNum, answerLetter)
           }
         })
+        keyLineIdx.add(i)
         continue
       }
       
@@ -153,10 +158,48 @@ export function parseQuestionsFromPlainText(text: string): FormField[] {
   let hadOptions = false // Track if we've seen options for current question
   let currentQuestionNumber: number | null = null // Track question number for answer key mapping
   let detectedAnswerLetter: string | null = null // Answer detected after current question's options
+  // Essay marking written under a question: "Keywords: a, b, c" and optionally "Points: 10"
+  let pendingKeywords: string[] | null = null
+  let pendingPoints: number | null = null
+
+  // Turns the question into an auto-marked essay if keywords were given under it
+  const withMarking = (field: FormField): FormField => {
+    let result = field
+    if (pendingKeywords && pendingKeywords.length > 0 && !field.options?.length) {
+      result = {
+        ...field,
+        type: 'essay',
+        isQuiz: true,
+        keywords: pendingKeywords,
+        points: pendingPoints ?? 5,
+      }
+    } else if (pendingPoints !== null && field.isQuiz) {
+      result = { ...field, points: pendingPoints }
+    }
+    pendingKeywords = null
+    pendingPoints = null
+    return result
+  }
+
+  // Consumes a "Keywords: ..." or "Points: N" line; true if it was one
+  const readMarkingLine = (line: string): boolean => {
+    const keywordsMatch = line.match(/^(?:marking\s+)?key\s*words?\s*[:\-]\s*(.+)$/i)
+    if (keywordsMatch) {
+      pendingKeywords = keywordsMatch[1].split(/[,;]/).map((k) => k.trim()).filter(Boolean)
+      return true
+    }
+    const pointsMatch = line.match(/^(?:points?|marks?)\s*[:\-]\s*(\d+(?:\.\d+)?)\s*$/i)
+    if (pointsMatch) {
+      pendingPoints = parseFloat(pointsMatch[1])
+      return true
+    }
+    return false
+  }
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
-    
+    if (keyLineIdx.has(i)) continue // already read in the first pass
+
     // Detect if this line contains multiple inline options like "A) ... B) ... C) ... D) ..."
     const inlineOptions = splitMultipleOptions(line)
     const hasInlineOptions = inlineOptions.length > 1
@@ -187,7 +230,7 @@ export function parseQuestionsFromPlainText(text: string): FormField[] {
         if (!answerLetter && currentQuestionNumber !== null) {
           answerLetter = answerKeyMap.get(currentQuestionNumber) || null
         }
-        fields.push(createFieldFromQuestion(currentQuestion, currentOptions, answerLetter))
+        fields.push(withMarking(createFieldFromQuestion(currentQuestion, currentOptions, answerLetter)))
         detectedAnswerLetter = null
       }
       
@@ -262,6 +305,7 @@ export function parseQuestionsFromPlainText(text: string): FormField[] {
     }
     // If we have a question and this line doesn't match patterns, it might be part of the question
     else if (currentQuestion && line.length > 0 && !isOption) {
+      if (readMarkingLine(line)) continue
       // First, check if this line contains an answer pattern (after options)
       if (hadOptions && currentOptions.length > 0) {
         const answerLetter = detectAnswerPattern(line)
@@ -291,7 +335,7 @@ export function parseQuestionsFromPlainText(text: string): FormField[] {
           if (!answerLetter && currentQuestionNumber !== null) {
             answerLetter = answerKeyMap.get(currentQuestionNumber) || null
           }
-          fields.push(createFieldFromQuestion(currentQuestion, currentOptions, answerLetter))
+          fields.push(withMarking(createFieldFromQuestion(currentQuestion, currentOptions, answerLetter)))
           detectedAnswerLetter = null
           
           // Extract question number from new question
@@ -317,7 +361,7 @@ export function parseQuestionsFromPlainText(text: string): FormField[] {
               if (!answerLetter && currentQuestionNumber !== null) {
                 answerLetter = answerKeyMap.get(currentQuestionNumber) || null
               }
-              fields.push(createFieldFromQuestion(currentQuestion, currentOptions, answerLetter))
+              fields.push(withMarking(createFieldFromQuestion(currentQuestion, currentOptions, answerLetter)))
               detectedAnswerLetter = null
               
               const numberMatch = line.match(/^(\d+)[.)]/)
@@ -344,7 +388,7 @@ export function parseQuestionsFromPlainText(text: string): FormField[] {
     if (!answerLetter && currentQuestionNumber !== null) {
       answerLetter = answerKeyMap.get(currentQuestionNumber) || null
     }
-    fields.push(createFieldFromQuestion(currentQuestion, currentOptions, answerLetter))
+    fields.push(withMarking(createFieldFromQuestion(currentQuestion, currentOptions, answerLetter)))
   }
   
   // Final pass: If we found answers in the answer key section, update fields that don't have answers yet
@@ -372,7 +416,7 @@ export function parseQuestionsFromPlainText(text: string): FormField[] {
     
     lines.forEach((line, index) => {
       const match = line.match(/^(\d+)[.)]\s*(.+)/)
-      if (match) {
+      if (match && !keyLineIdx.has(index)) {
         numberedLines.push({
           number: parseInt(match[1]),
           text: match[2].trim(),
@@ -384,14 +428,18 @@ export function parseQuestionsFromPlainText(text: string): FormField[] {
     // If we found many numbered items but few fields, try parsing them
     if (numberedLines.length > fields.length && numberedLines.length >= 5) {
       fields = [] // Reset and try again
+      pendingKeywords = null
+      pendingPoints = null
       let questionText = ''
       let options: string[] = []
       let lastNumber = 0
       
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i]
+        if (keyLineIdx.has(i)) continue
+        if (questionText && readMarkingLine(line)) continue
         const numberMatch = line.match(/^(\d+)[.)]\s*(.+)/)
-        const isOption = line.match(/^[-*•]\s+/) || 
+        const isOption = line.match(/^[-*•]\s+/) ||
                          line.match(/^[a-zA-Z][.)]\s+/) ||
                          line.match(/^[a-zA-Z]\)\s+/)
         
@@ -402,7 +450,7 @@ export function parseQuestionsFromPlainText(text: string): FormField[] {
           if (questionText) {
             // Check answer key map for this question number
             const answerLetter = answerKeyMap.get(lastNumber) || null
-            fields.push(createFieldFromQuestion(questionText, options, answerLetter))
+            fields.push(withMarking(createFieldFromQuestion(questionText, options, answerLetter)))
           }
           
           // Start new question
@@ -439,7 +487,7 @@ export function parseQuestionsFromPlainText(text: string): FormField[] {
       // Add last question
       if (questionText) {
         const answerLetter = answerKeyMap.get(lastNumber) || null
-        fields.push(createFieldFromQuestion(questionText, options, answerLetter))
+        fields.push(withMarking(createFieldFromQuestion(questionText, options, answerLetter)))
       }
     }
   }
@@ -483,7 +531,7 @@ export function parseQuestionsFromPlainText(text: string): FormField[] {
           const questionNum = parseInt(numberMatch[1])
           answerLetter = answerKeyMap.get(questionNum) || null
         }
-        fields.push(createFieldFromQuestion(questionText.replace(/^\d+[.)]\s*/, ''), options, answerLetter))
+        fields.push(withMarking(createFieldFromQuestion(questionText.replace(/^\d+[.)]\s*/, ''), options, answerLetter)))
       } else {
         fields.push({
           id: uuidv4(),

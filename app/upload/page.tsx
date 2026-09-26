@@ -263,7 +263,7 @@ export default function UploadPage() {
                 Upload Quiz Document
               </h1>
               <p className="text-gray-600">
-                Upload a Word document with objective questions (A, B, C, D) and we'll automatically build your quiz
+                Upload a Word document with objective (A, B, C, D) and essay questions — answers can be in the same document
               </p>
             </div>
 
@@ -290,10 +290,35 @@ export default function UploadPage() {
                 </label>
               </div>
 
+              <details className="mt-6 text-left bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <summary className="text-sm font-medium text-blue-900 cursor-pointer">
+                  Put questions and answers in one document — format guide
+                </summary>
+                <p className="text-xs text-blue-900 mt-3 mb-2">
+                  Write the answer under each question. No separate answer key file needed.
+                </p>
+                <pre className="text-xs bg-white border border-blue-100 rounded p-3 whitespace-pre-wrap text-gray-800">{`1. What is 2 + 2?
+A) 3
+B) 4
+C) 5
+D) 6
+Answer: B
+
+2. Explain how plants make their food.
+Keywords: photosynthesis, chlorophyll, sunlight
+Points: 10`}</pre>
+                <ul className="text-xs text-blue-900 mt-2 space-y-1 list-disc list-inside">
+                  <li><strong>Answer:</strong> gives the correct option for objective questions.</li>
+                  <li><strong>Keywords:</strong> makes it an essay, auto-marked by how many keywords the student uses (close word forms count).</li>
+                  <li><strong>Points:</strong> is optional (essays default to 5).</li>
+                  <li>An <strong>ANSWER KEY</strong> section at the end (<code>1. B</code>, <code>2. C</code>…) also works.</li>
+                </ul>
+              </details>
+
               {/* Answer key upload (optional) */}
               <div className="mt-6 text-left">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Optional: Upload Answer Key (Word)
+                  Optional: Separate Answer Key (Word) — only if answers aren't in the document above
                 </label>
                 <p className="text-xs text-gray-500 mb-2">
                   Use a Word document with an <code>ANSWERS:</code> heading and lines like <code>1. C</code>, <code>2. A</code>.
