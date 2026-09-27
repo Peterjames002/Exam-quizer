@@ -262,7 +262,7 @@ export default function EssayBuilderPage() {
             </button>
           </div>
           <p className="mt-3 text-xs text-gray-500">
-            Students type their answer and can also draw calculations/diagrams right in the browser (mouse, trackpad, or touchscreen) or upload a photo of handwritten work. Add marking keywords to have answers marked automatically, or grade them yourself.
+            Students type their answer and can also draw calculations/diagrams right in the browser (mouse, trackpad, or touchscreen) or upload a photo of handwritten work. You mark each answer in the Dashboard; optional keywords suggest a mark.
           </p>
         </div>
       </div>

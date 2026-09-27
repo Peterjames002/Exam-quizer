@@ -12,11 +12,13 @@ type GradableField = {
 
 export type AnswerResult = {
   isCorrect: boolean;
-  points: number;
-  needsGrading?: boolean; // essay with no keywords: tutor marks it by hand
-  autoGraded?: boolean; // essay marked by keywords; tutor may still override
+  points: number; // counts toward the score; 0 for essays until the tutor confirms
+  needsGrading?: boolean; // essay waiting for the tutor to mark and confirm
+  autoGraded?: boolean; // legacy: essays auto-marked before tutor confirmation existed
+  suggestedPoints?: number; // essay: mark suggested from the tutor's keywords
   matchedKeywords?: string[];
   missedKeywords?: string[];
+  markedAt?: number; // essay: when the tutor confirmed the mark
 };
 
 // Answer-key data that must never reach a student's browser.
@@ -40,22 +42,18 @@ export function gradeResponses(
     const userAnswer = responses[field.id];
 
     if (field.type === "essay") {
+      // Essays are always marked by the tutor. Keywords only give a suggestion,
+      // and nothing counts toward the score until the tutor confirms a mark.
       const keywords = (field.keywords ?? []).filter((k) => k.trim());
-      if (keywords.length === 0) {
-        answers[field.id] = { isCorrect: false, points: 0, needsGrading: true };
-        continue;
+      const result: AnswerResult = { isCorrect: false, points: 0, needsGrading: true };
+      if (keywords.length > 0) {
+        const { matched, missed } = matchKeywords(String(userAnswer ?? ""), keywords);
+        // Share of keywords found, rounded to the nearest half point
+        result.suggestedPoints = Math.round((matched.length / keywords.length) * points * 2) / 2;
+        result.matchedKeywords = matched;
+        result.missedKeywords = missed;
       }
-      const { matched, missed } = matchKeywords(String(userAnswer ?? ""), keywords);
-      // Share of keywords found, rounded to the nearest half point
-      const earned = Math.round((matched.length / keywords.length) * points * 2) / 2;
-      score += earned;
-      answers[field.id] = {
-        isCorrect: matched.length === keywords.length,
-        points: earned,
-        autoGraded: true,
-        matchedKeywords: matched,
-        missedKeywords: missed,
-      };
+      answers[field.id] = result;
       continue;
     }
 

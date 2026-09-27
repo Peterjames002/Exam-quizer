@@ -309,7 +309,7 @@ Keywords: photosynthesis, chlorophyll, sunlight
 Points: 10`}</pre>
                 <ul className="text-xs text-blue-900 mt-2 space-y-1 list-disc list-inside">
                   <li><strong>Answer:</strong> gives the correct option for objective questions.</li>
-                  <li><strong>Keywords:</strong> makes it an essay, auto-marked by how many keywords the student uses (close word forms count).</li>
+                  <li><strong>Keywords:</strong> makes it an essay; the keywords suggest a mark when you mark it (close word forms count).</li>
                   <li><strong>Points:</strong> is optional (essays default to 5).</li>
                   <li>An <strong>ANSWER KEY</strong> section at the end (<code>1. B</code>, <code>2. C</code>…) also works.</li>
                 </ul>

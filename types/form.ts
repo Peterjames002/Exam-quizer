@@ -23,7 +23,7 @@ export interface FormField {
   isQuiz?: boolean // Whether this is an objective question with correct answers
   correctAnswers?: string[] // Correct answers for quiz questions
   points?: number // Points for this question (default: 1)
-  keywords?: string[] // Essay questions: auto-marked by how many of these appear (close forms count)
+  keywords?: string[] // Essay questions: suggests a mark from how many of these appear (close forms count)
   validation?: {
     min?: number
     max?: number
@@ -54,9 +54,11 @@ export interface FormResponse {
     isCorrect?: boolean
     points?: number
     needsGrading?: boolean // True for essay answers awaiting manual grading
-    autoGraded?: boolean // Essay marked from the tutor's keywords
+    autoGraded?: boolean // Legacy: essay auto-marked from keywords before tutor confirmation
+    suggestedPoints?: number // Essay: mark suggested from the tutor's keywords
     matchedKeywords?: string[]
     missedKeywords?: string[]
+    markedAt?: number // Essay: when the tutor confirmed the mark
   }> // Quiz answer results
   studentName?: string // Student's name
   studentClass?: string // Student's matriculation number (field kept as studentClass for existing data)

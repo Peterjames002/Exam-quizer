@@ -1,426 +1,538 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Form } from '@/types/form'
-import { useStorage } from '@/lib/storage'
-import { Download, ArrowLeft, Share2, Copy, Check } from 'lucide-react'
 import Link from 'next/link'
 import { useUser } from '@clerk/nextjs'
-import { useConvex, useConvexAuth, usePaginatedQuery, useQuery } from 'convex/react'
+import { useConvexAuth, useQuery } from 'convex/react'
+import {
+  ArrowLeft,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  PenLine,
+  Share2,
+} from 'lucide-react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
-import { docToFormResponse } from '@/lib/mapConvexResponse'
+import type { Form, FormResponse } from '@/types/form'
+import { useStorage } from '@/lib/storage'
 import { useShareLink } from '@/lib/useShareLink'
+import { docToFormResponse } from '@/lib/mapConvexResponse'
+import { breakdown, isEssayConfirmed, isEssayField, isObjectiveField, percentBadge } from '@/lib/results'
 import CameraPhoto from '@/components/CameraPhoto'
+import EssayMarker from '@/components/EssayMarker'
+import LinkStatus from '@/components/LinkStatus'
+
+type Tab = 'objective' | 'marking' | 'essay' | 'final'
 
 export default function AdminDashboard() {
   const { user, isLoaded } = useUser()
   const { isAuthenticated: isConvexAuthed } = useConvexAuth()
   const storage = useStorage()
-  const convex = useConvex()
-  const [pickedFormId, setSelectedFormId] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
-  const [exporting, setExporting] = useState(false)
-
   const shareLink = useShareLink()
-  const handleCopyLink = async () => {
-    if (!selectedFormId) return
-    await shareLink(selectedFormId)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
 
-  const ownerFormsRaw = useQuery(
-    api.forms.getAllForms,
-    isConvexAuthed ? {} : 'skip',
-  )
+  const ownerFormsRaw = useQuery(api.forms.getAllForms, isConvexAuthed ? {} : 'skip')
   const forms = storage.getAllForms()
-  const quizForms: Form[] = forms?.filter((f) => f.isQuiz) || []
-  // Show the first exam straight away until the tutor picks another
-  const selectedFormId = pickedFormId ?? quizForms[0]?.id ?? null
-  const isOwnerFormsLoading = !!user?.id && (!isConvexAuthed || ownerFormsRaw === undefined)
-  const selectedForm = selectedFormId ? quizForms.find((f) => f.id === selectedFormId) : null
+  const exams: Form[] = useMemo(
+    () => forms.filter((f) => f.isQuiz).sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? '')),
+    [forms],
+  )
+  const formsLoading = !!user?.id && (!isConvexAuthed || ownerFormsRaw === undefined)
 
-  const formIdsConvex = useMemo(
-    () => quizForms.map((f) => f.id as Id<'forms'>),
-    [quizForms],
+  const [pickedFormId, setPickedFormId] = useState<string | null>(null)
+  const selectedForm = exams.find((f) => f.id === pickedFormId) ?? exams[0] ?? null
+  const [tab, setTab] = useState<Tab>('marking')
+  const [copied, setCopied] = useState(false)
+
+  const docs = useQuery(
+    api.responses.getResponses,
+    selectedForm ? { formId: selectedForm.id as Id<'forms'> } : 'skip',
+  )
+  const responses: FormResponse[] = useMemo(
+    () => (docs ?? []).map(docToFormResponse).sort((a, b) => a.submittedAt.localeCompare(b.submittedAt)),
+    [docs],
   )
 
-  const statsForGrid = useQuery(
-    api.responses.getResponseStatsForForms,
-    user && formIdsConvex.length > 0 ? { formIds: formIdsConvex } : 'skip',
-  )
+  const hasEssays = !!selectedForm?.fields.some(isEssayField)
+  const hasObjective = !!selectedForm?.fields.some(isObjectiveField)
+  const pendingCount = selectedForm
+    ? responses.reduce((n, r) => n + breakdown(selectedForm, r).essaysPending, 0)
+    : 0
 
-  const countByFormId = useMemo(() => {
-    const m = new Map<string, number>()
-    if (!statsForGrid) return m
-    for (const row of statsForGrid) {
-      m.set(row.formId, row.count)
-    }
-    return m
-  }, [statsForGrid])
-
-  const statsSelected = useQuery(
-    api.responses.getResponseStats,
-    selectedFormId ? { formId: selectedFormId as Id<'forms'> } : 'skip',
-  )
-
-  const {
-    results: selectedResponseDocs,
-    status: pageStatus,
-    loadMore,
-  } = usePaginatedQuery(
-    api.responses.listResponsesByForm,
-    selectedFormId ? { formId: selectedFormId as Id<'forms'> } : 'skip',
-    { initialNumItems: 50 },
-  )
-
-  const responses = selectedResponseDocs.map(docToFormResponse)
-  const submissionTotal = statsSelected?.count ?? responses.length
-
-  const exportToCSV = async () => {
-    if (!selectedForm || !selectedFormId) return
-    setExporting(true)
-    try {
-      const rows = await convex.query(api.responses.getResponses, {
-        formId: selectedFormId as Id<'forms'>,
-      })
-      const allResponses = rows.map(docToFormResponse)
-      if (allResponses.length === 0) return
-
-      const headers = ['Name', 'Matric No.', 'Score', 'Max Score', 'Percentage', 'Submitted At', 'Tab Switches']
-      const csvRows = allResponses.map((response) => {
-        const percentage =
-          response.maxScore && response.maxScore > 0
-            ? Math.round(((response.score || 0) / response.maxScore) * 100)
-            : 0
-        const date = new Date(response.submittedAt).toLocaleString()
-
-        return [
-          response.studentName || 'N/A',
-          response.studentClass || 'N/A',
-          response.score || 0,
-          response.maxScore || 0,
-          `${percentage}%`,
-          date,
-          response.tabSwitchCount || 0,
-        ]
-      })
-
-      const csvContent = [
-        headers.join(','),
-        ...csvRows.map((row) =>
-          row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','),
-        ),
-      ].join('\n')
-
-      const blob = new Blob([csvContent], { type: 'text/csv' })
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${selectedForm?.title || 'quiz'}_results.csv`
-      a.click()
-      window.URL.revokeObjectURL(url)
-    } finally {
-      setExporting(false)
-    }
+  const handleShare = async () => {
+    if (!selectedForm) return
+    await shareLink(selectedForm.id)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2500)
   }
 
-  if (!isLoaded) {
+  const exportCsv = () => {
+    if (!selectedForm) return
+    const headers = [
+      'Name', 'Matric No.', 'Objective', 'Objective Max', 'Essay (confirmed)', 'Essay Max',
+      'Total', 'Total Max', 'Percent', 'Status', 'Submitted At', 'Left Tab', 'Paste Attempts', 'Camera',
+    ]
+    const rows = responses.map((r) => {
+      const b = breakdown(selectedForm, r)
+      return [
+        r.studentName ?? '', r.studentClass ?? '', b.objectiveScore, b.objectiveMax, b.essayScore, b.essayMax,
+        b.total, b.totalMax, `${b.percent}%`, b.complete ? 'Complete' : `${b.essaysPending} essay(s) to mark`,
+        new Date(r.submittedAt).toLocaleString(), r.tabSwitchCount ? 'Yes' : 'No', r.pasteAttempts ?? 0,
+        r.cameraStatus ?? '',
+      ]
+    })
+    const csv = [headers, ...rows]
+      .map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${selectedForm.title.replace(/[^a-z0-9]/gi, '_')}_results.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  if (!isLoaded || formsLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
+      <div className="py-24 flex justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
       </div>
     )
   }
 
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-8 max-w-md w-full text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Sign In Required</h1>
-          <p className="text-gray-600 mb-6">
-            Please sign in to access your admin dashboard
-          </p>
-          <Link
-            href="/sign-in"
-            className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-          >
-            Sign In
+  const tabs: { id: Tab; label: string; badge?: number; show: boolean }[] = [
+    { id: 'objective', label: 'Objective', show: hasObjective },
+    { id: 'marking', label: 'Essay marking', badge: pendingCount, show: hasEssays },
+    { id: 'essay', label: 'Essay results', show: hasEssays },
+    { id: 'final', label: 'Final results', show: true },
+  ]
+  const visibleTabs = tabs.filter((t) => t.show)
+  const activeTab: Tab = visibleTabs.some((t) => t.id === tab) ? tab : visibleTabs[0]?.id ?? 'final'
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8">
+      <Link href="/prepare" className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm">
+        <ArrowLeft className="w-4 h-4" />
+        Prepare Exams
+      </Link>
+
+      <div className="mt-3 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="mt-1 text-gray-600">Mark essays, then review objective, essay and final results.</p>
+        </div>
+        {exams.length > 0 && (
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+            <label className="sr-only" htmlFor="exam-picker">Exam</label>
+            <select
+              id="exam-picker"
+              value={selectedForm?.id ?? ''}
+              onChange={(e) => setPickedFormId(e.target.value)}
+              className="w-full sm:w-72 px-3 py-2 border border-gray-300 rounded-lg bg-white font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {exams.map((f) => (
+                <option key={f.id} value={f.id}>{f.title}</option>
+              ))}
+            </select>
+            <div className="flex gap-2">
+              <button
+                onClick={handleShare}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+                title="Copy the student link (opens it for 5 minutes)"
+              >
+                {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+                {copied ? 'Copied' : 'Share link'}
+              </button>
+              <button
+                onClick={exportCsv}
+                disabled={responses.length === 0}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-40 text-sm font-medium"
+              >
+                <Download className="w-4 h-4" />
+                CSV
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {exams.length === 0 ? (
+        <div className="mt-8 bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
+          <p className="font-medium text-gray-900">No exams yet</p>
+          <p className="mt-1 text-sm text-gray-600">Create an exam first — its submissions will appear here.</p>
+          <Link href="/prepare" className="mt-4 inline-flex px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+            Prepare Exams
           </Link>
+        </div>
+      ) : selectedForm && (
+        <>
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
+            <span>{responses.length} submission{responses.length !== 1 ? 's' : ''}</span>
+            <LinkStatus expiresAt={selectedForm.linkExpiresAt} />
+          </div>
+
+          {/* Tabs */}
+          <div className="mt-5 sm:border-b sm:border-gray-200">
+            <nav className="grid grid-cols-2 sm:flex sm:gap-1" role="tablist">
+              {visibleTabs.map((t) => (
+                <button
+                  key={t.id}
+                  role="tab"
+                  aria-selected={activeTab === t.id}
+                  onClick={() => setTab(t.id)}
+                  className={`px-4 py-2.5 sm:-mb-px border-b-2 text-sm font-medium whitespace-nowrap text-center transition-colors ${
+                    activeTab === t.id
+                      ? 'border-blue-600 text-blue-700'
+                      : 'border-transparent text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  {t.label}
+                  {!!t.badge && (
+                    <span className="ml-2 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs">{t.badge}</span>
+                  )}
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          <div className="mt-6">
+            {docs === undefined ? (
+              <div className="py-16 flex justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+              </div>
+            ) : responses.length === 0 ? (
+              <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center text-gray-600">
+                No submissions yet. Share the link — it opens for 5 minutes.
+              </div>
+            ) : activeTab === 'objective' ? (
+              <ObjectiveTab form={selectedForm} responses={responses} />
+            ) : activeTab === 'marking' ? (
+              <MarkingTab form={selectedForm} responses={responses} onDone={() => setTab('essay')} />
+            ) : activeTab === 'essay' ? (
+              <EssayResultsTab form={selectedForm} responses={responses} onMark={() => setTab('marking')} />
+            ) : (
+              <FinalTab form={selectedForm} responses={responses} />
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function questionNumbers(form: Form) {
+  const map = new Map<string, number>()
+  let n = 0
+  for (const f of form.fields) if (f.type !== 'textblock') map.set(f.id, ++n)
+  return map
+}
+
+function StudentName({ r }: { r: FormResponse }) {
+  return (
+    <div className="min-w-0">
+      <p className="font-semibold text-gray-900 break-words">{r.studentName || 'Unnamed student'}</p>
+      <p className="text-sm text-gray-500">Matric No. {r.studentClass || 'N/A'}</p>
+    </div>
+  )
+}
+
+function ScoreBadge({ score, max }: { score: number; max: number }) {
+  const percent = max > 0 ? Math.round((score / max) * 100) : 0
+  return (
+    <span className="inline-flex items-center gap-2 whitespace-nowrap">
+      <span className="font-bold text-gray-900">
+        {score}
+        <span className="font-normal text-gray-500"> / {max}</span>
+      </span>
+      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${percentBadge(percent)}`}>{percent}%</span>
+    </span>
+  )
+}
+
+// ---------- Objective ----------
+function ObjectiveTab({ form, responses }: { form: Form; responses: FormResponse[] }) {
+  const [open, setOpen] = useState<string | null>(null)
+  const fields = form.fields.filter(isObjectiveField)
+  const numbers = questionNumbers(form)
+
+  return (
+    <ul className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-200">
+      {responses.map((r) => {
+        const b = breakdown(form, r)
+        const isOpen = open === r.id
+        return (
+          <li key={r.id}>
+            <button
+              onClick={() => setOpen(isOpen ? null : r.id)}
+              className="w-full p-4 flex items-center gap-3 text-left hover:bg-gray-50"
+              aria-expanded={isOpen}
+            >
+              <div className="flex-1 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <StudentName r={r} />
+                <ScoreBadge score={b.objectiveScore} max={b.objectiveMax} />
+              </div>
+              <ChevronDown className={`w-5 h-5 text-gray-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isOpen && (
+              <div className="px-4 pb-4 space-y-2">
+                {fields.map((f) => {
+                  const given = r.responses[f.id]
+                  const correct = r.answers?.[f.id]?.isCorrect
+                  return (
+                    <div key={f.id} className={`rounded-lg border p-3 text-sm ${correct ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
+                      <p className="font-medium text-gray-900">
+                        <span className="text-gray-400 mr-1">Q{numbers.get(f.id)}.</span>
+                        {f.label}
+                      </p>
+                      <p className="mt-1">
+                        <span className={correct ? 'text-green-700' : 'text-red-700'}>
+                          {correct ? '✓' : '✗'} {Array.isArray(given) ? given.join(', ') : String(given ?? '—') || '—'}
+                        </span>
+                        {!correct && !!f.correctAnswers?.length && (
+                          <span className="text-gray-600"> · correct: {f.correctAnswers.join(', ')}</span>
+                        )}
+                      </p>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+// ---------- Essay marking ----------
+function MarkingTab({ form, responses, onDone }: { form: Form; responses: FormResponse[]; onDone: () => void }) {
+  const essayFields = form.fields.filter(isEssayField)
+  const numbers = questionNumbers(form)
+  const [showMarked, setShowMarked] = useState(false)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  const queue = responses.filter((r) => showMarked || breakdown(form, r).essaysPending > 0)
+  const selected = queue.find((r) => r.id === selectedId) ?? queue[0] ?? null
+  const selectedIndex = selected ? queue.indexOf(selected) : -1
+  const next = queue[selectedIndex + 1] ?? null
+  const allMarked = responses.every((r) => breakdown(form, r).essaysPending === 0)
+
+  if (queue.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
+        <CheckCircle2 className="w-12 h-12 text-green-600 mx-auto" />
+        <p className="mt-3 font-semibold text-gray-900">All essays are marked</p>
+        <p className="mt-1 text-sm text-gray-600">Confirmed marks are in Essay results and Final results.</p>
+        <div className="mt-4 flex justify-center gap-3">
+          <button onClick={onDone} className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium">
+            View essay results
+          </button>
+          <button onClick={() => setShowMarked(true)} className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 font-medium">
+            Review marked essays
+          </button>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b border-gray-200 sticky top-16 z-30">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-          <Link
-            href="/prepare"
-            className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            <span>Prepare Exams</span>
-          </Link>
-          {selectedFormId && (
-            <div className="flex w-full sm:w-auto gap-2">
-              <button
-                onClick={handleCopyLink}
-                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                title="Copy shareable link (opens it for 5 minutes)"
-              >
-                {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
-                {copied ? 'Copied — open 5 min' : 'Share link'}
-              </button>
-              {submissionTotal > 0 && (
-                <button
-                  onClick={() => void exportToCSV()}
-                  disabled={exporting}
-                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 text-sm font-medium"
-                >
-                  <Download className="w-4 h-4" />
-                  {exporting ? 'Exporting…' : 'Export CSV'}
-                </button>
-              )}
-            </div>
-          )}
+    <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
+      {/* Student list */}
+      <aside className="bg-white rounded-xl border border-gray-200 overflow-hidden self-start">
+        <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+          <span className="text-sm font-semibold text-gray-900">{showMarked ? 'All students' : 'To mark'}</span>
+          <label className="flex items-center gap-2 text-xs text-gray-600">
+            <input type="checkbox" checked={showMarked} onChange={(e) => setShowMarked(e.target.checked)} />
+            Show marked
+          </label>
         </div>
-      </div>
-
-      <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="mt-1 mb-6 text-gray-600">Pick an exam to see each student&apos;s score, flags and camera snapshots.</p>
-
-        {!isOwnerFormsLoading && quizForms.length === 0 && (
-          <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
-            <p className="font-medium text-gray-900">No exams yet</p>
-            <p className="mt-1 text-sm text-gray-600">Create an exam first — its results will appear here.</p>
-            <Link
-              href="/prepare"
-              className="mt-4 inline-flex items-center px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-            >
-              Prepare Exams
-            </Link>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {quizForms.map((form) => {
-            const formId = form.id
-            const submissionCount = countByFormId.get(String(formId)) ?? 0
+        <ul className="max-h-72 lg:max-h-[32rem] overflow-y-auto divide-y divide-gray-100">
+          {queue.map((r) => {
+            const pending = breakdown(form, r).essaysPending
+            const active = selected?.id === r.id
             return (
-              <button
-                key={String(formId)}
-                onClick={() => setSelectedFormId(formId)}
-                className={`p-4 rounded-lg border-2 text-left transition-all ${
-                  selectedFormId === formId
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-200 bg-white hover:border-blue-300'
-                }`}
-              >
-                <h3 className="font-semibold text-gray-900 mb-1">{form.title}</h3>
-                <p className="text-sm text-gray-600">
-                  {submissionCount} submission{submissionCount !== 1 ? 's' : ''}
-                </p>
-              </button>
-            )
-          })}
-        </div>
-
-        {!selectedFormId && quizForms.length > 0 && (
-          <p className="text-center text-gray-500 py-8">Select an exam above to see its results.</p>
-        )}
-
-        {selectedFormId && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-            <div className="bg-blue-50 border-b border-blue-200 p-4">
-              <div className="flex items-center justify-between flex-wrap gap-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900 mb-1">Share this exam</h3>
-                  <p className="text-xs text-gray-600">Students don&apos;t need an account. Copying opens the link for 5 minutes.</p>
-                </div>
-                <div className="flex items-center gap-2 w-full sm:w-auto sm:flex-1 sm:max-w-md">
-                  <input
-                    type="text"
-                    readOnly
-                    value={`${typeof window !== 'undefined' ? window.location.origin : ''}/form/${selectedFormId}`}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm"
-                    onClick={(e) => (e.target as HTMLInputElement).select()}
-                  />
-                  <button
-                    onClick={handleCopyLink}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
-                  >
-                    {copied ? (
-                      <>
-                        <Check className="w-4 h-4" />
-                        Copied
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-4 h-4" />
-                        Copy
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="p-4 border-b border-gray-200 bg-gray-50">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-900 break-words">{selectedForm?.title}</h2>
-                  <p className="text-sm text-gray-600 mt-1">
-                    {submissionTotal} submission{submissionTotal !== 1 ? 's' : ''}
-                  </p>
-                </div>
-                <Link
-                  href={`/form/${selectedFormId}/responses`}
-                  className="text-sm font-medium text-blue-600 hover:text-blue-800"
-                >
-                  View answers, photos &amp; essay marking →
-                </Link>
-              </div>
-            </div>
-
-            {isOwnerFormsLoading ? (
-              <div className="p-12 text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p className="text-gray-600">Loading responses...</p>
-              </div>
-            ) : pageStatus === 'LoadingFirstPage' && responses.length === 0 ? (
-              <div className="p-12 text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p className="text-gray-600">Loading responses...</p>
-              </div>
-            ) : submissionTotal === 0 ? (
-              <div className="p-12 text-center">
-                <p className="text-gray-600 mb-4">No submissions yet</p>
-                <p className="text-sm text-gray-500 mb-4">
-                  Share the exam link with students to start collecting responses
-                </p>
+              <li key={r.id}>
                 <button
-                  onClick={handleCopyLink}
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  onClick={() => setSelectedId(r.id)}
+                  className={`w-full px-4 py-3 flex items-center justify-between gap-2 text-left ${active ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
                 >
-                  {copied ? (
-                    <>
-                      <Check className="w-5 h-5" />
-                      Copied — open 5 min
-                    </>
+                  <span className="min-w-0">
+                    <span className={`block truncate font-medium ${active ? 'text-blue-800' : 'text-gray-900'}`}>{r.studentName || 'Unnamed'}</span>
+                    <span className="block truncate text-xs text-gray-500">{r.studentClass}</span>
+                  </span>
+                  {pending > 0 ? (
+                    <span className="shrink-0 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs">{pending} left</span>
                   ) : (
-                    <>
-                      <Copy className="w-5 h-5" />
-                      Copy Share Link
-                    </>
+                    <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
                   )}
                 </button>
-              </div>
-            ) : (
-              <>
-                <ul className="divide-y divide-gray-200">
-                  {responses.map((response, index) => {
-                    const percentage =
-                      response.maxScore && response.maxScore > 0
-                        ? Math.round(((response.score || 0) / response.maxScore) * 100)
-                        : 0
-                    const essaysToGrade = Object.values(response.answers ?? {}).filter((a) => a?.needsGrading).length
-                    const cameraProblem =
-                      response.cameraStatus === 'blocked' || response.cameraStatus === 'unavailable'
-                    const photos = response.cameraPhotos ?? []
+              </li>
+            )
+          })}
+        </ul>
+      </aside>
+
+      {/* Essays of the selected student */}
+      {selected && (
+        <section className="space-y-4 min-w-0">
+          <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <PenLine className="w-5 h-5 text-blue-600" />
+              <StudentName r={selected} />
+            </div>
+            <span className="text-sm text-gray-500">Submitted {new Date(selected.submittedAt).toLocaleString()}</span>
+          </div>
+
+          {essayFields.map((f) => (
+            <EssayMarker
+              key={`${selected.id}-${f.id}`}
+              responseId={selected.id}
+              field={f}
+              questionNumber={numbers.get(f.id)}
+              studentAnswer={selected.responses[f.id]}
+              answer={selected.answers?.[f.id]}
+              attachmentId={selected.attachments?.[f.id]}
+            />
+          ))}
+
+          <div className="flex justify-end">
+            {next ? (
+              <button
+                onClick={() => setSelectedId(next.id)}
+                className="inline-flex items-center gap-1 px-4 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 font-medium"
+              >
+                Next student <ChevronRight className="w-4 h-4" />
+              </button>
+            ) : allMarked ? (
+              <button onClick={onDone} className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium">
+                View essay results
+              </button>
+            ) : null}
+          </div>
+        </section>
+      )}
+    </div>
+  )
+}
+
+// ---------- Essay results ----------
+function EssayResultsTab({ form, responses, onMark }: { form: Form; responses: FormResponse[]; onMark: () => void }) {
+  const essayFields = form.fields.filter(isEssayField)
+  const numbers = questionNumbers(form)
+  const pendingTotal = responses.reduce((n, r) => n + breakdown(form, r).essaysPending, 0)
+
+  return (
+    <div className="space-y-4">
+      {pendingTotal > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
+          <span>{pendingTotal} essay answer{pendingTotal !== 1 ? 's are' : ' is'} still waiting to be marked — they don&apos;t count yet.</span>
+          <button onClick={onMark} className="font-medium text-amber-900 underline">Go to marking</button>
+        </div>
+      )}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-600">
+            <tr>
+              <th className="px-4 py-3">Student</th>
+              {essayFields.map((f) => (
+                <th key={f.id} className="px-4 py-3 whitespace-nowrap" title={f.label}>Q{numbers.get(f.id)} ({f.points || 1})</th>
+              ))}
+              <th className="px-4 py-3 whitespace-nowrap">Essay total</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {responses.map((r) => {
+              const b = breakdown(form, r)
+              return (
+                <tr key={r.id}>
+                  <td className="px-4 py-3 min-w-[10rem]"><StudentName r={r} /></td>
+                  {essayFields.map((f) => {
+                    const a = r.answers?.[f.id]
                     return (
-                      <li key={response.id} className="p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center gap-4">
-                        <div className="flex items-start gap-3 lg:w-72 shrink-0">
-                          <span className="mt-0.5 text-sm text-gray-400 w-6 text-right">{index + 1}</span>
-                          <div className="min-w-0">
-                            <p className="font-semibold text-gray-900 break-words">{response.studentName || 'Unnamed student'}</p>
-                            <p className="text-sm text-gray-500">Matric No. {response.studentClass || 'N/A'}</p>
-                            <p className="text-xs text-gray-400 mt-0.5">{new Date(response.submittedAt).toLocaleString()}</p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-3 lg:w-40 shrink-0 pl-9 lg:pl-0">
-                          <span className="text-lg font-bold text-gray-900">
-                            {response.score || 0}
-                            <span className="text-sm font-normal text-gray-500"> / {response.maxScore || 0}</span>
-                          </span>
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                              percentage >= 80
-                                ? 'bg-green-100 text-green-800'
-                                : percentage >= 60
-                                  ? 'bg-yellow-100 text-yellow-800'
-                                  : 'bg-red-100 text-red-800'
-                            }`}
-                          >
-                            {percentage}%
-                          </span>
-                        </div>
-
-                        <div className="flex flex-wrap gap-1.5 flex-1 pl-9 lg:pl-0">
-                          {!!response.tabSwitchCount && (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">Left the exam tab</span>
-                          )}
-                          {!!response.pasteAttempts && (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">Tried to paste {response.pasteAttempts}×</span>
-                          )}
-                          {cameraProblem && (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                              {response.cameraStatus === 'blocked' ? 'Camera blocked' : 'No camera'}
-                            </span>
-                          )}
-                          {essaysToGrade > 0 && (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                              {essaysToGrade} essay{essaysToGrade !== 1 ? 's' : ''} to grade
-                            </span>
-                          )}
-                          {!response.tabSwitchCount && !response.pasteAttempts && !cameraProblem && essaysToGrade === 0 && (
-                            <span className="text-xs text-gray-400">No flags</span>
-                          )}
-                        </div>
-
-                        <div className="flex gap-2 pl-9 lg:pl-0">
-                          {photos.length > 0 ? (
-                            photos.map((photoId, i) => (
-                              <CameraPhoto
-                                key={photoId}
-                                storageId={photoId}
-                                size="w-20"
-                                label={`Snapshot ${i + 1} of ${response.studentName || 'student'}`}
-                              />
-                            ))
-                          ) : (
-                            <span className="text-xs text-gray-400">{cameraProblem ? 'No snapshots' : 'No snapshots yet'}</span>
-                          )}
-                        </div>
-                      </li>
+                      <td key={f.id} className="px-4 py-3 whitespace-nowrap">
+                        {isEssayConfirmed(a) ? (
+                          <span className="font-medium text-gray-900">{a?.points ?? 0}</span>
+                        ) : (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">Not marked</span>
+                        )}
+                      </td>
                     )
                   })}
-                </ul>
-                {pageStatus === 'CanLoadMore' && (
-                  <div className="p-4 flex justify-center border-t border-gray-200">
-                    <button
-                      type="button"
-                      onClick={() => loadMore(50)}
-                      className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                    >
-                      Load more
-                    </button>
-                  </div>
-                )}
-                {pageStatus === 'LoadingMore' && (
-                  <div className="p-4 text-center text-sm text-gray-600">Loading more…</div>
-                )}
-              </>
-            )}
-          </div>
-        )}
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <ScoreBadge score={b.essayScore} max={b.essayMax} />
+                    {!b.complete && <span className="block text-xs text-amber-700 mt-0.5">{b.essaysPending} pending</span>}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   )
 }
+
+// ---------- Final results ----------
+function FinalTab({ form, responses }: { form: Form; responses: FormResponse[] }) {
+  const hasObjective = form.fields.some(isObjectiveField)
+  const hasEssays = form.fields.some(isEssayField)
+
+  return (
+    <ul className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-200">
+      {responses.map((r) => {
+        const b = breakdown(form, r)
+        const cameraProblem = r.cameraStatus === 'blocked' || r.cameraStatus === 'unavailable'
+        const photos = r.cameraPhotos ?? []
+        return (
+          <li key={r.id} className="p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center gap-4">
+            <div className="lg:w-60 shrink-0">
+              <StudentName r={r} />
+              <p className="text-xs text-gray-400 mt-0.5">{new Date(r.submittedAt).toLocaleString()}</p>
+            </div>
+
+            <div className="lg:w-56 shrink-0 space-y-1 text-sm">
+              <ScoreBadge score={b.total} max={b.totalMax} />
+              <p className="text-xs text-gray-500">
+                {hasObjective && <>Objective {b.objectiveScore}/{b.objectiveMax}</>}
+                {hasObjective && hasEssays && ' · '}
+                {hasEssays && <>Essay {b.essayScore}/{b.essayMax}</>}
+              </p>
+              {b.complete ? (
+                <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Complete</span>
+              ) : (
+                <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                  {b.essaysPending} essay{b.essaysPending !== 1 ? 's' : ''} to mark
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-1.5 flex-1">
+              {!!r.tabSwitchCount && <Flag tone="amber">Left the exam tab</Flag>}
+              {!!r.pasteAttempts && <Flag tone="amber">Tried to paste {r.pasteAttempts}×</Flag>}
+              {cameraProblem && <Flag tone="red">{r.cameraStatus === 'blocked' ? 'Camera blocked' : 'No camera'}</Flag>}
+              {!r.tabSwitchCount && !r.pasteAttempts && !cameraProblem && <span className="text-xs text-gray-400">No flags</span>}
+            </div>
+
+            <div className="flex gap-2">
+              {photos.length > 0 ? (
+                photos.map((id, i) => (
+                  <CameraPhoto key={id} storageId={id} size="w-20" label={`Snapshot ${i + 1} of ${r.studentName || 'student'}`} />
+                ))
+              ) : (
+                <span className="text-xs text-gray-400">No snapshots</span>
+              )}
+            </div>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+function Flag({ tone, children }: { tone: 'amber' | 'red'; children: React.ReactNode }) {
+  const cls = tone === 'red' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
+  return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{children}</span>
+}
+

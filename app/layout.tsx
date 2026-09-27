@@ -12,7 +12,7 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: 'Exam Builder — Set, share and mark exams online',
   description:
-    'Build objective and essay exams from a Word document, share a time-limited link, and let the system mark answers — with camera monitoring and anti-cheating built in.',
+    'Build objective and essay exams from a Word document, share a time-limited link, mark objective answers instantly and essays from one dashboard — with camera monitoring and anti-cheating built in.',
 }
 
 export const viewport: Viewport = {

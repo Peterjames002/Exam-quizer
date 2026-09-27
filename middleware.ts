@@ -7,6 +7,7 @@ const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)',
   '/sign-up(.*)',
   '/form(.*)',
+  '/api/time',
 ]);
 
 // Only use Clerk middleware if publishable key is configured

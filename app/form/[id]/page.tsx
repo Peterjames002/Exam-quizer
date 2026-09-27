@@ -46,6 +46,8 @@ export default function FormViewPage() {
   const [isStarting, setIsStarting] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
+  // Server time minus device time, so the countdown follows the server's clock
+  const clockOffsetRef = useRef(0)
   const startExam = useMutation(api.exams.startExam)
   const sessionKey = `exam-session-${formId}`
 
@@ -75,6 +77,20 @@ export default function FormViewPage() {
       // sessionStorage unavailable (private mode) — student just starts normally
     }
   }, [sessionKey])
+
+  useEffect(() => {
+    const sentAt = Date.now()
+    fetch('/api/time', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then(({ now: serverNow }: { now: number }) => {
+        const receivedAt = Date.now()
+        clockOffsetRef.current = serverNow - (sentAt + receivedAt) / 2
+        setNow(Date.now() + clockOffsetRef.current)
+      })
+      .catch(() => {
+        // Fall back to the device clock; the server still enforces the limit
+      })
+  }, [])
 
   // Try to get form from user's forms first (if signed in)
   const userForm = storage.getForm(formId)
@@ -109,10 +125,11 @@ export default function FormViewPage() {
 
   // Tick while waiting on the start screen so the link closes on time
   useEffect(() => {
-    if (!enforcesLink || showQuiz) return
-    const interval = setInterval(() => setNow(Date.now()), 1000)
+    // Also ticks for the owner, who sees the link status as a preview
+    if (!form?.isQuiz || isPreview || showQuiz) return
+    const interval = setInterval(() => setNow(Date.now() + clockOffsetRef.current), 1000)
     return () => clearInterval(interval)
-  }, [enforcesLink, showQuiz])
+  }, [form?.isQuiz, isPreview, showQuiz])
 
   // A remembered session that's no longer valid (already submitted, or the form
   // was reset) returns no questions — drop it and show the start screen again
@@ -505,6 +522,19 @@ export default function FormViewPage() {
               <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-6">
                 Start within {formatTime(Math.max(0, Math.floor((form.linkExpiresAt - now) / 1000)))} — after that this link expires.
               </p>
+            )}
+            {!!userForm && !isPreview && (
+              <div className="text-sm text-blue-900 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 mb-6 space-y-1">
+                <p>
+                  {linkOpen
+                    ? `Students see: “Start within ${formatTime(Math.max(0, Math.floor((form.linkExpiresAt! - now) / 1000)))}”.`
+                    : 'Students see: “This exam link has expired”. Share the link again to open it for 5 minutes.'}
+                </p>
+                <p className="text-blue-700">
+                  You own this exam, so the 5-minute limit doesn&apos;t apply to you. Open the link in a private/incognito
+                  window to see exactly what students see.
+                </p>
+              </div>
             )}
             <div className="space-y-4">
               <div>

@@ -21,8 +21,8 @@ const FEATURES = [
   {
     icon: Sparkles,
     color: 'bg-blue-100 text-blue-700',
-    title: 'Smart essay marking',
-    body: 'Give each essay a few keywords. Answers are marked by how many appear — close word forms and small spelling slips still count.',
+    title: 'Essay marking made easy',
+    body: 'Mark every essay yourself in one place. Optional keywords suggest a mark — close word forms and spelling slips count — and you confirm it.',
   },
   {
     icon: Clock,
@@ -53,7 +53,7 @@ const FEATURES = [
 const STEPS = [
   { title: 'Prepare', body: 'Upload a Word/PDF document or write questions in the builder.' },
   { title: 'Share', body: 'Copy the exam link and send it to your students — they don’t need an account.' },
-  { title: 'Review', body: 'Scores come in automatically. Check essays, photos and flags, then export.' },
+  { title: 'Review', body: 'Objective answers mark themselves. Mark the essays, check photos and flags, then export.' },
 ]
 
 const FAQS = [
@@ -67,7 +67,7 @@ const FAQS = [
   },
   {
     q: 'How are essays marked?',
-    a: 'If you give an essay question keywords, it is marked by the share of keywords the student uses — “evaporate” also matches “evaporation”. Without keywords you mark it yourself. You can change any mark afterwards.',
+    a: 'You mark every essay yourself from the Dashboard’s Essay marking tab. If you gave the question keywords, a suggested mark is shown (“evaporate” also matches “evaporation”) — you can accept it or enter your own. Essay marks only count once you confirm them.',
   },
   {
     q: 'Do students see their score?',
@@ -97,8 +97,8 @@ export default function HomePage() {
             Set, share and mark exams — <span className="text-blue-600">in minutes</span>
           </h1>
           <p className="mt-6 max-w-2xl mx-auto text-lg sm:text-xl text-gray-600 text-balance">
-            Turn a Word document into an online exam, share a link that expires, and let the system mark objective
-            and essay answers for you.
+            Turn a Word document into an online exam, share a link that expires, objective answers are marked
+            instantly while you mark essays from one dashboard.
           </p>
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link
@@ -166,7 +166,7 @@ export default function HomePage() {
               laptop.
             </p>
             <p className="mt-4 text-gray-600 leading-relaxed">
-              Marking happens automatically: objective answers instantly, and essays by the keywords you choose.
+              Objective answers are marked instantly. Essays are marked by you, with keyword suggestions to speed things up.
               Monitoring features like expiring links, camera photos and paste blocking keep results trustworthy.
             </p>
           </div>

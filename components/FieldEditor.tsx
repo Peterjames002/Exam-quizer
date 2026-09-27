@@ -310,9 +310,9 @@ export default function FieldEditor({
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <p className="mt-1 text-xs text-gray-500">
-                    Separate with commas. The essay is marked automatically by how many keywords appear —
+                    Separate with commas. When you mark this essay, a mark is suggested from how many keywords appear —
                     close forms and small spelling slips count (e.g. &quot;evaporate&quot; matches &quot;evaporation&quot;).
-                    Leave empty to mark by hand. You can adjust any mark afterwards.
+                    Leave empty if you prefer no suggestion. You always confirm the final mark.
                   </p>
                 </div>
               )}
@@ -408,7 +408,7 @@ export default function FieldEditor({
                   {field.isQuiz && (
                     <div className="mt-2">
                       <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                        {field.type === 'essay' ? (field.keywords?.length ? `Essay Question (auto-marked: ${field.keywords.length} keyword${field.keywords.length !== 1 ? 's' : ''})` : 'Essay Question (manually graded)') : 'Quiz Question'} • {field.points || 1} point{(field.points || 1) !== 1 ? 's' : ''}
+                        {field.type === 'essay' ? (field.keywords?.length ? `Essay Question (${field.keywords.length} marking keyword${field.keywords.length !== 1 ? 's' : ''})` : 'Essay Question (manually graded)') : 'Quiz Question'} • {field.points || 1} point{(field.points || 1) !== 1 ? 's' : ''}
                       </span>
                     </div>
                   )}

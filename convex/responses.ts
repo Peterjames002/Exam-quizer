@@ -61,7 +61,8 @@ export const saveResponse = mutation({
   },
 });
 
-// Tutor sets or overrides the mark for an essay answer (owner only)
+// Tutor confirms (or changes) the mark for one student's essay answer (owner only).
+// Only confirmed essay marks count toward the student's score.
 export const gradeEssayAnswer = mutation({
   args: {
     responseId: v.id("responses"),
@@ -85,6 +86,7 @@ export const gradeEssayAnswer = mutation({
       points: clampedPoints,
       needsGrading: false,
       autoGraded: false,
+      markedAt: Date.now(),
     };
 
     const newScore = Object.values(existingAnswers).reduce(
