@@ -199,3 +199,23 @@ export const getResponseStatsForForms = query({
     return result;
   },
 });
+
+// Per-subject summary for the dashboard's subject cards (owner only):
+// submissions, and essay answers still waiting for the teacher's mark.
+export const getSubjectSummaries = query({
+  args: { formIds: v.array(v.id("forms")) },
+  handler: async (ctx, args) => {
+    const result: { formId: string; count: number; essaysToMark: number }[] = [];
+    for (const formId of args.formIds) {
+      const rows = await ownedResponses(ctx, formId);
+      let essaysToMark = 0;
+      for (const row of rows) {
+        for (const answer of Object.values((row.answers ?? {}) as Record<string, AnswerResult>)) {
+          if (answer?.needsGrading || answer?.autoGraded) essaysToMark++;
+        }
+      }
+      result.push({ formId, count: rows.length, essaysToMark });
+    }
+    return result;
+  },
+});

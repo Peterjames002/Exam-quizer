@@ -46,6 +46,12 @@ export default function AdminDashboard() {
   const [tab, setTab] = useState<Tab>('marking')
   const [copied, setCopied] = useState(false)
 
+  const summaries = useQuery(
+    api.responses.getSubjectSummaries,
+    exams.length > 0 ? { formIds: exams.map((f) => f.id as Id<'forms'>) } : 'skip',
+  )
+  const summaryById = new Map((summaries ?? []).map((row) => [row.formId, row]))
+
   const docs = useQuery(
     api.responses.getResponses,
     selectedForm ? { formId: selectedForm.id as Id<'forms'> } : 'skip',
@@ -103,9 +109,9 @@ export default function AdminDashboard() {
   }
 
   const tabs: { id: Tab; label: string; badge?: number; show: boolean }[] = [
-    { id: 'objective', label: 'Objective', show: hasObjective },
-    { id: 'marking', label: 'Essay marking', badge: pendingCount, show: hasEssays },
-    { id: 'essay', label: 'Essay results', show: hasEssays },
+    { id: 'objective', label: 'Objective', show: true },
+    { id: 'marking', label: 'Essay marking', badge: pendingCount, show: true },
+    { id: 'essay', label: 'Essay results', show: true },
     { id: 'final', label: 'Final results', show: true },
   ]
   const visibleTabs = tabs.filter((t) => t.show)
@@ -121,41 +127,8 @@ export default function AdminDashboard() {
       <div className="mt-3 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="mt-1 text-gray-600">Mark essays, then review objective, essay and final results.</p>
+          <p className="mt-1 text-gray-600">Choose a subject, mark its essays, then review its results.</p>
         </div>
-        {exams.length > 0 && (
-          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-            <label className="sr-only" htmlFor="exam-picker">Exam</label>
-            <select
-              id="exam-picker"
-              value={selectedForm?.id ?? ''}
-              onChange={(e) => setPickedFormId(e.target.value)}
-              className="w-full sm:w-72 px-3 py-2 border border-gray-300 rounded-lg bg-white font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {exams.map((f) => (
-                <option key={f.id} value={f.id}>{f.title}</option>
-              ))}
-            </select>
-            <div className="flex gap-2">
-              <button
-                onClick={handleShare}
-                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
-                title="Copy the student link (opens it for 5 minutes)"
-              >
-                {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
-                {copied ? 'Copied' : 'Share link'}
-              </button>
-              <button
-                onClick={exportCsv}
-                disabled={responses.length === 0}
-                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-40 text-sm font-medium"
-              >
-                <Download className="w-4 h-4" />
-                CSV
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
       {exams.length === 0 ? (
@@ -168,9 +141,61 @@ export default function AdminDashboard() {
         </div>
       ) : selectedForm && (
         <>
-          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
-            <span>{responses.length} submission{responses.length !== 1 ? 's' : ''}</span>
-            <LinkStatus expiresAt={selectedForm.linkExpiresAt} />
+          {/* Subjects: every exam the tutor created, each marked separately */}
+          <h2 className="mt-6 text-sm font-semibold uppercase tracking-wide text-gray-500">Subjects</h2>
+          <div className="mt-2 flex gap-3 overflow-x-auto pb-2 snap-x">
+            {exams.map((f) => {
+              const summary = summaryById.get(f.id)
+              const active = f.id === selectedForm.id
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => setPickedFormId(f.id)}
+                  className={`snap-start shrink-0 w-56 text-left rounded-xl border-2 p-4 transition ${
+                    active ? 'border-blue-600 bg-blue-50' : 'border-gray-200 bg-white hover:border-blue-300'
+                  }`}
+                >
+                  <span className={`block font-semibold break-words ${active ? 'text-blue-900' : 'text-gray-900'}`}>{f.title}</span>
+                  <span className="mt-1 block text-sm text-gray-600">
+                    {summary?.count ?? 0} submission{(summary?.count ?? 0) !== 1 ? 's' : ''}
+                  </span>
+                  {!!summary?.essaysToMark && (
+                    <span className="mt-2 inline-block px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-medium">
+                      {summary.essaysToMark} essay{summary.essaysToMark !== 1 ? 's' : ''} to mark
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="mt-6 flex flex-col md:flex-row md:items-center md:justify-between gap-3 rounded-xl bg-white border border-gray-200 p-4">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Subject</p>
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 break-words">{selectedForm.title}</h2>
+              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
+                <span>{responses.length} submission{responses.length !== 1 ? 's' : ''}</span>
+                <LinkStatus expiresAt={selectedForm.linkExpiresAt} />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleShare}
+                className="flex-1 md:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                title="Copy the student link (opens it for 5 minutes)"
+              >
+                {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+                {copied ? 'Copied' : 'Share link'}
+              </button>
+              <button
+                onClick={exportCsv}
+                disabled={responses.length === 0}
+                className="flex-1 md:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-40 font-medium"
+              >
+                <Download className="w-4 h-4" />
+                Export CSV
+              </button>
+            </div>
           </div>
 
           {/* Tabs */}
@@ -182,7 +207,7 @@ export default function AdminDashboard() {
                   role="tab"
                   aria-selected={activeTab === t.id}
                   onClick={() => setTab(t.id)}
-                  className={`px-4 py-2.5 sm:-mb-px border-b-2 text-sm font-medium whitespace-nowrap text-center transition-colors ${
+                  className={`px-5 py-3 sm:-mb-px border-b-2 text-base font-semibold whitespace-nowrap text-center transition-colors ${
                     activeTab === t.id
                       ? 'border-blue-600 text-blue-700'
                       : 'border-transparent text-gray-600 hover:text-gray-900'
@@ -206,6 +231,10 @@ export default function AdminDashboard() {
               <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center text-gray-600">
                 No submissions yet. Share the link — it opens for 5 minutes.
               </div>
+            ) : activeTab === 'objective' && !hasObjective ? (
+              <EmptyTab>This subject has no objective questions — it&apos;s all essays. Use the Essay marking tab.</EmptyTab>
+            ) : (activeTab === 'marking' || activeTab === 'essay') && !hasEssays ? (
+              <EmptyTab>This subject has no essay questions, so there is nothing to mark. See the Objective tab.</EmptyTab>
             ) : activeTab === 'objective' ? (
               <ObjectiveTab form={selectedForm} responses={responses} />
             ) : activeTab === 'marking' ? (
@@ -536,3 +565,8 @@ function Flag({ tone, children }: { tone: 'amber' | 'red'; children: React.React
   return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{children}</span>
 }
 
+function EmptyTab({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center text-gray-600">{children}</div>
+  )
+}
