@@ -11,6 +11,7 @@ import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
 import { docToFormResponse } from '@/lib/mapConvexResponse'
 import { useShareLink } from '@/lib/useShareLink'
+import CameraPhoto from '@/components/CameraPhoto'
 
 export default function AdminDashboard() {
   const { user, isLoaded } = useUser()
@@ -192,8 +193,8 @@ export default function AdminDashboard() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Results dashboard</h1>
-        <p className="mt-1 mb-6 text-gray-600">Pick an exam to see every student&apos;s score.</p>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Dashboard</h1>
+        <p className="mt-1 mb-6 text-gray-600">Pick an exam to see each student&apos;s score, flags and camera snapshots.</p>
 
         {!isOwnerFormsLoading && quizForms.length === 0 && (
           <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
@@ -322,92 +323,85 @@ export default function AdminDashboard() {
               </div>
             ) : (
               <>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gray-50 border-b border-gray-200">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
-                          #
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
-                          Name
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
-                          Matric No.
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
-                          Score
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
-                          Max Score
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
-                          Percentage
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r border-gray-200">
-                          Submitted At
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                          Left Tab?
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {responses.map((response, index) => {
-                        const percentage =
-                          response.maxScore && response.maxScore > 0
-                            ? Math.round(((response.score || 0) / response.maxScore) * 100)
-                            : 0
-                        const date = new Date(response.submittedAt).toLocaleString()
+                <ul className="divide-y divide-gray-200">
+                  {responses.map((response, index) => {
+                    const percentage =
+                      response.maxScore && response.maxScore > 0
+                        ? Math.round(((response.score || 0) / response.maxScore) * 100)
+                        : 0
+                    const essaysToGrade = Object.values(response.answers ?? {}).filter((a) => a?.needsGrading).length
+                    const cameraProblem =
+                      response.cameraStatus === 'blocked' || response.cameraStatus === 'unavailable'
+                    const photos = response.cameraPhotos ?? []
+                    return (
+                      <li key={response.id} className="p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center gap-4">
+                        <div className="flex items-start gap-3 lg:w-72 shrink-0">
+                          <span className="mt-0.5 text-sm text-gray-400 w-6 text-right">{index + 1}</span>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-gray-900 break-words">{response.studentName || 'Unnamed student'}</p>
+                            <p className="text-sm text-gray-500">Matric No. {response.studentClass || 'N/A'}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{new Date(response.submittedAt).toLocaleString()}</p>
+                          </div>
+                        </div>
 
-                        return (
-                          <tr key={response.id} className="hover:bg-gray-50">
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
-                              {index + 1}
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 border-r border-gray-200">
-                              {response.studentName || 'N/A'}
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
-                              {response.studentClass || 'N/A'}
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
-                              {response.score || 0}
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 border-r border-gray-200">
-                              {response.maxScore || 0}
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm border-r border-gray-200">
-                              <span
-                                className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                  percentage >= 80
-                                    ? 'bg-green-100 text-green-800'
-                                    : percentage >= 60
-                                      ? 'bg-yellow-100 text-yellow-800'
-                                      : 'bg-red-100 text-red-800'
-                                }`}
-                              >
-                                {percentage}%
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 border-r border-gray-200">
-                              {date}
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                              {response.tabSwitchCount ? (
-                                <span className="px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                                  Yes — auto-submitted
-                                </span>
-                              ) : (
-                                '—'
-                              )}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                        <div className="flex items-center gap-3 lg:w-40 shrink-0 pl-9 lg:pl-0">
+                          <span className="text-lg font-bold text-gray-900">
+                            {response.score || 0}
+                            <span className="text-sm font-normal text-gray-500"> / {response.maxScore || 0}</span>
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                              percentage >= 80
+                                ? 'bg-green-100 text-green-800'
+                                : percentage >= 60
+                                  ? 'bg-yellow-100 text-yellow-800'
+                                  : 'bg-red-100 text-red-800'
+                            }`}
+                          >
+                            {percentage}%
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5 flex-1 pl-9 lg:pl-0">
+                          {!!response.tabSwitchCount && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">Left the exam tab</span>
+                          )}
+                          {!!response.pasteAttempts && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">Tried to paste {response.pasteAttempts}×</span>
+                          )}
+                          {cameraProblem && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                              {response.cameraStatus === 'blocked' ? 'Camera blocked' : 'No camera'}
+                            </span>
+                          )}
+                          {essaysToGrade > 0 && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                              {essaysToGrade} essay{essaysToGrade !== 1 ? 's' : ''} to grade
+                            </span>
+                          )}
+                          {!response.tabSwitchCount && !response.pasteAttempts && !cameraProblem && essaysToGrade === 0 && (
+                            <span className="text-xs text-gray-400">No flags</span>
+                          )}
+                        </div>
+
+                        <div className="flex gap-2 pl-9 lg:pl-0">
+                          {photos.length > 0 ? (
+                            photos.map((photoId, i) => (
+                              <CameraPhoto
+                                key={photoId}
+                                storageId={photoId}
+                                size="w-20"
+                                label={`Snapshot ${i + 1} of ${response.studentName || 'student'}`}
+                              />
+                            ))
+                          ) : (
+                            <span className="text-xs text-gray-400">{cameraProblem ? 'No snapshots' : 'No snapshots yet'}</span>
+                          )}
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
                 {pageStatus === 'CanLoadMore' && (
                   <div className="p-4 flex justify-center border-t border-gray-200">
                     <button

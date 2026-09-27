@@ -24,6 +24,9 @@ export default function SiteHeader() {
 
   if (isExamPage(pathname)) return null
 
+  // Signed-in tutors also get their results dashboard
+  const nav = isSignedIn ? [...NAV, { href: '/admin', label: 'Dashboard' }] : NAV
+
   const linkClass = 'text-gray-700 hover:text-blue-700 font-medium transition-colors'
 
   return (
@@ -37,7 +40,7 @@ export default function SiteHeader() {
         </Link>
 
         <nav className="hidden md:flex items-center gap-8">
-          {NAV.map((item) => (
+          {nav.map((item) => (
             <Link key={item.href} href={item.href} className={linkClass}>
               {item.label}
             </Link>
@@ -77,7 +80,7 @@ export default function SiteHeader() {
 
       {open && (
         <nav className="md:hidden border-t border-gray-200 bg-white px-4 py-3 flex flex-col gap-1">
-          {NAV.map((item) => (
+          {nav.map((item) => (
             <Link
               key={item.href}
               href={item.href}
