@@ -205,16 +205,33 @@ export const getResponseStatsForForms = query({
 export const getSubjectSummaries = query({
   args: { formIds: v.array(v.id("forms")) },
   handler: async (ctx, args) => {
-    const result: { formId: string; count: number; essaysToMark: number }[] = [];
+    const result: { formId: string; count: number; essaysToMark: number; averagePercent: number | null }[] = [];
     for (const formId of args.formIds) {
       const rows = await ownedResponses(ctx, formId);
+      const form = await ctx.db.get(formId);
+      const pointsById = new Map(
+        ((form?.fields ?? []) as Array<{ id: string; points?: number }>).map((f) => [f.id, f.points || 1]),
+      );
+      // Same as the dashboard: grade on marked questions only
       let essaysToMark = 0;
+      const percents: number[] = [];
       for (const row of rows) {
-        for (const answer of Object.values((row.answers ?? {}) as Record<string, AnswerResult>)) {
-          if (answer?.needsGrading || answer?.autoGraded) essaysToMark++;
+        let unmarkedPoints = 0;
+        let unmarkedScore = 0;
+        for (const [fieldId, answer] of Object.entries((row.answers ?? {}) as Record<string, AnswerResult>)) {
+          if (answer?.needsGrading || answer?.autoGraded) {
+            essaysToMark++;
+            unmarkedPoints += pointsById.get(fieldId) ?? 1;
+            unmarkedScore += answer.points ?? 0;
+          }
         }
+        const max = (row.maxScore ?? 0) - unmarkedPoints;
+        if (max > 0) percents.push((((row.score ?? 0) - unmarkedScore) / max) * 100);
       }
-      result.push({ formId, count: rows.length, essaysToMark });
+      const averagePercent = percents.length
+        ? Math.round(percents.reduce((a, p) => a + p, 0) / percents.length)
+        : null;
+      result.push({ formId, count: rows.length, essaysToMark, averagePercent });
     }
     return result;
   },

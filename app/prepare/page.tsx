@@ -78,7 +78,7 @@ export default function PreparePage() {
           className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 font-medium"
         >
           <BarChart3 className="w-4 h-4" />
-          Results dashboard
+          Dashboard
         </Link>
       </div>
 
@@ -147,11 +147,11 @@ export default function PreparePage() {
                     {copiedId === form.id ? 'Link copied — open for 5 min' : 'Share link'}
                   </button>
                   <Link
-                    href={`/form/${form.id}/responses`}
+                    href={`/admin/${form.id}`}
                     className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-medium"
                   >
                     <Users className="w-4 h-4" />
-                    Responses
+                    Results
                   </Link>
                   <Link
                     href={`/form/${form.id}`}

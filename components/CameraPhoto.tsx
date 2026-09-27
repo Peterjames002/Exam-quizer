@@ -25,7 +25,7 @@ export default function CameraPhoto({
   }
 
   return (
-    <a href={url} target="_blank" rel="noopener noreferrer" title={label}>
+    <a href={url} target="_blank" rel="noopener noreferrer" title={label} onClick={(e) => e.stopPropagation()}>
       {/* eslint-disable-next-line @next/next/no-img-element -- Convex storage URL, not a static asset */}
       <img src={url} alt={label} className={`${size} aspect-[4/3] object-cover rounded border border-gray-200 hover:opacity-90`} />
     </a>
